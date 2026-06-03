@@ -1,0 +1,12 @@
+{
+  "name": "sprout-ai-job-search",
+  "version": "1.0.0",
+  "description": "Premium Sprout-like Job Search Platform & AI Resume Tailoring engine",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx -y browser-sync start --server --files \"index.html, src/*\"",
+    "scrape": "node scripts/scrape.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
