@@ -2,11 +2,8 @@
  * Teak Job Search & AI Resume Tailor Console - Client Application Logic
  */
 
-// Python AI backend URL — change this if deploying remotely
-// Automatically switches between local testing and your live Vercel backend
-const AI_SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:5000'
-  : 'https://backend-job-search-sigma.vercel.app';
+// Python AI backend URL 
+const AI_SERVER_URL = 'https://backend-job-search-sigma.vercel.app';
 
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
