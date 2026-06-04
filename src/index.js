@@ -2,8 +2,8 @@
  * Teak Job Search & AI Resume Tailor Console - Client Application Logic
  */
 
-// Python AI backend URL 
-const AI_SERVER_URL = 'https://backend-job-search-kappa.vercel.app';
+// Python AI backend URL — change this if deploying remotely
+const AI_SERVER_URL = 'http://localhost:5000';
 
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
