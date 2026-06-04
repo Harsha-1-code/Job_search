@@ -7,8 +7,10 @@ The frontend calls these endpoints instead of making direct API calls from the b
 import os
 import json
 import requests
+# pyrefly: ignore [missing-import]
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -295,6 +297,30 @@ def raw_generate():
         return jsonify({"success": True, **result})
     except RuntimeError as e:
         return jsonify({"success": False, "error": str(e)}), 502
+
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+
+@app.route("/api/jobs", methods=["GET"])
+def get_jobs():
+    """Fetch jobs from Supabase database."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "Supabase URL and Service Role Key must be configured in environment."}), 500
+
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    }
+    url = f"{SUPABASE_URL}/rest/v1/jobs?select=*"
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if not resp.ok:
+            return jsonify({"error": f"Supabase error: {resp.text}"}), resp.status_code
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ===================================================================

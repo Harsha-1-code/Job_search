@@ -303,6 +303,13 @@ const EMAILS_DATABASE = [
   }
 ];
 
+// Add simulated posted dates to seed jobs
+SEED_JOBS.forEach((job, index) => {
+  const date = new Date();
+  date.setDate(date.getDate() - ((index % 5) + 1));
+  job.posted_at = date.toISOString();
+});
+
 let activeJobs = [...SEED_JOBS];
 let currentJobIndex = 0;
 let currentTailoringMode = 'normal';
@@ -489,6 +496,24 @@ function setupNavigation() {
   });
 }
 
+// Relative time ago calculation helper
+function getRelativeTimeString(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays <= 0) {
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours <= 0) {
+      return 'just now';
+    }
+    return `${diffHours}h ago`;
+  }
+  return `${diffDays}d ago`;
+}
+
 // Render active card with stacking backdrops
 function renderJobCard() {
   const cardContainer = document.getElementById("job-card");
@@ -517,6 +542,13 @@ function renderJobCard() {
   document.getElementById("ats-badge").innerText = job.ats;
   document.getElementById("match-score-display").innerText = `${job.matchScore}%`;
   document.getElementById("careers-link-btn").href = job.careersUrl || job.url;
+
+  // Render relative posted time
+  const relativeTime = getRelativeTimeString(job.posted_at || job.postedAt);
+  const timeEl = document.getElementById("posted-time-display");
+  if (timeEl) {
+    timeEl.innerText = relativeTime ? `• ${relativeTime}` : '';
+  }
 
   // Render Required Qualifications
   const reqContainer = document.getElementById("required-qualifications-list");
@@ -853,7 +885,7 @@ function updateSearchFilters() {
 }
 
 // Scraper simulation grid loader
-function runManualScraper() {
+async function runManualScraper() {
   const overlay = document.getElementById("scraper-log-overlay");
   const logBody = document.getElementById("scraper-log-body");
 
@@ -885,7 +917,7 @@ function runManualScraper() {
   ];
 
   let i = 0;
-  const interval = setInterval(() => {
+  const interval = setInterval(async () => {
     if (i < targetCompanies.length) {
       const c = targetCompanies[i];
       addLine(`Accessing ${c.name} endpoints via ${c.ats.toUpperCase()} parser...`, "info");
@@ -895,126 +927,62 @@ function runManualScraper() {
     } else {
       clearInterval(interval);
       addLine("========================================", "system");
-      addLine(`Scraper batch complete! Filtered 8 matching roles from ${targetCompanies.length} companies.`, "system");
+      addLine("Connecting to Supabase database API...", "info");
 
-      const newJobs = [
-        {
-          id: 101,
-          title: "Product Engineer",
-          company: "Canva",
-          location: "Bengaluru, India",
-          ats: "greenhouse",
-          matchScore: 90,
-          type: "fulltime",
-          qualifications: ["Proficient in frontend systems and design patterns", "Strong React/TypeScript experience"],
-          desired: ["Great graphics and design tool experience", "WebGL or Canvas API knowledge"],
-          url: "https://boards.greenhouse.io/canva",
-          careersUrl: "https://www.canva.com/careers"
-        },
-        {
-          id: 102,
-          title: "Senior Site Reliability Engineer",
-          company: "Atlassian",
-          location: "Bengaluru, India",
-          ats: "greenhouse",
-          matchScore: 88,
-          type: "fulltime",
-          qualifications: ["5+ years in SRE or infrastructure roles", "Expert-level Kubernetes and Terraform"],
-          desired: ["Experience with Jira/Confluence platform internals"],
-          url: "https://boards.greenhouse.io/atlassian",
-          careersUrl: "https://www.atlassian.com/company/careers"
-        },
-        {
-          id: 103,
-          title: "Full Stack Developer Intern",
-          company: "Shopify",
-          location: "Remote",
-          ats: "greenhouse",
-          matchScore: 91,
-          type: "intern",
-          qualifications: ["Pursuing CS degree", "Familiarity with Ruby on Rails and React"],
-          desired: ["Interest in e-commerce and merchant tools"],
-          url: "https://boards.greenhouse.io/shopify",
-          careersUrl: "https://www.shopify.com/careers"
-        },
-        {
-          id: 104,
-          title: "Systems Engineer",
-          company: "Cloudflare",
-          location: "Remote, India",
-          ats: "greenhouse",
-          matchScore: 93,
-          type: "fulltime",
-          qualifications: ["Strong C/C++ or Rust for systems programming", "Networking and HTTP protocol expertise"],
-          desired: ["Experience with edge computing or CDN systems"],
-          url: "https://boards.greenhouse.io/cloudflare",
-          careersUrl: "https://www.cloudflare.com/careers"
-        },
-        {
-          id: 105,
-          title: "Database Engineer",
-          company: "MongoDB",
-          location: "Bengaluru, India",
-          ats: "greenhouse",
-          matchScore: 87,
-          type: "fulltime",
-          qualifications: ["Deep expertise in database internals and storage engines", "C++ or Go proficiency"],
-          desired: ["Experience with distributed consensus algorithms (Raft, Paxos)"],
-          url: "https://boards.greenhouse.io/mongodb",
-          careersUrl: "https://www.mongodb.com/company/careers"
-        },
-        {
-          id: 106,
-          title: "Backend Developer",
-          company: "Supabase",
-          location: "Remote",
-          ats: "greenhouse",
-          matchScore: 94,
-          type: "fulltime",
-          qualifications: ["Strong PostgreSQL and TypeScript/Node.js skills", "Open-source contribution experience"],
-          desired: ["Experience with real-time subscriptions and auth systems"],
-          url: "https://boards.greenhouse.io/supabase",
-          careersUrl: "https://supabase.com/careers"
-        },
-        {
-          id: 107,
-          title: "Frontend Engineer",
-          company: "GitLab",
-          location: "Remote",
-          ats: "greenhouse",
-          matchScore: 89,
-          type: "fulltime",
-          qualifications: ["Vue.js or React expertise", "Experience building developer-facing tools"],
-          desired: ["Familiarity with CI/CD pipelines and DevOps workflows"],
-          url: "https://boards.greenhouse.io/gitlab",
-          careersUrl: "https://about.gitlab.com/jobs"
-        },
-        {
-          id: 108,
-          title: "Software Engineer",
-          company: "Rippling",
-          location: "Bengaluru, India",
-          ats: "greenhouse",
-          matchScore: 92,
-          type: "fulltime",
-          qualifications: ["Full-stack proficiency with Python/Django and React", "Strong system design skills"],
-          desired: ["Experience with HR/payroll SaaS products", "AWS/GCP cloud experience"],
-          url: "https://boards.greenhouse.io/rippling",
-          careersUrl: "https://www.rippling.com/careers"
+      try {
+        const response = await fetch(`${AI_SERVER_URL}/api/jobs`);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status} ${response.statusText}`);
         }
-      ];
+        const dbJobs = await response.json();
+        addLine(`-> Successfully retrieved ${dbJobs.length} jobs from Supabase!`, "system");
 
-      activeJobs = [...SEED_JOBS, ...newJobs];
-      currentJobIndex = 0;
-      renderJobCard();
-      updateSearchFilters();
+        // Map and normalize DB fields to client expectations
+        const newJobs = dbJobs.map(job => {
+          const isIntern = job.title.toLowerCase().includes('intern');
+          return {
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            ats: job.ats,
+            matchScore: job.matchScore || Math.floor(Math.random() * 15) + 83,
+            type: job.type || (isIntern ? 'intern' : 'fulltime'),
+            qualifications: job.qualifications || [
+              "Solid understanding of software development patterns",
+              "Experience writing clean, maintainable code",
+              "Ability to work collaboratively in a fast-paced environment"
+            ],
+            desired: job.desired || [
+              "Familiarity with cloud platforms (AWS, GCP, or Azure)",
+              "Interest or experience in the company's domain",
+              "Good communication and team-player mindset"
+            ],
+            url: job.url,
+            careersUrl: job.careersUrl || null,
+            posted_at: job.posted_at
+          };
+        });
 
-      setTimeout(() => {
-        overlay.style.display = "none";
-        showNotification(`Refreshed! Deck now has ${activeJobs.length} jobs from ${targetCompanies.length + 10} companies.`);
-      }, 1200);
+        activeJobs = [...SEED_JOBS, ...newJobs];
+        currentJobIndex = 0;
+        renderJobCard();
+        updateSearchFilters();
+
+        setTimeout(() => {
+          overlay.style.display = "none";
+          showNotification(`Refreshed! Deck now has ${activeJobs.length} jobs from Supabase.`);
+        }, 1200);
+
+      } catch (err) {
+        addLine(`Error fetching jobs: ${err.message}`, "error");
+        setTimeout(() => {
+          overlay.style.display = "none";
+          showNotification(`Failed to load jobs from database: ${err.message}`);
+        }, 2000);
+      }
     }
-  }, 400);
+  }, 200);
 }
 
 // AI Panel control matrix

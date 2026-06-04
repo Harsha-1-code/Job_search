@@ -6,15 +6,30 @@
  * that are located in "Bengaluru" or "Remote".
  */
 
+// Load environment variables in local development
+require('dotenv').config();
+
 const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 const companies = require('../companies.json');
+
+// Initialize Supabase Client using environment variables
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required.');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Calculate time boundaries
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_CUTOFF = 30;
 
-function runScraper() {
+async function runScraper() {
   console.log('=== Starting Sprout Bulk Seed Job Scraper ===');
 
   // 1. Calculate time boundary (within a month)
@@ -134,10 +149,20 @@ function runScraper() {
   console.log(`\n=== Scraper Summary ===`);
   console.log(`Successfully scraped & filtered ${scrapedJobs.length} active jobs!`);
 
-  // Simulated saving to Supabase
-  console.log('Writing results to database mock...');
-  // In production, you would run:
-  // await supabase.from('jobs').upsert(scrapedJobs)
+  // Saving to Supabase
+  console.log(`Writing ${scrapedJobs.length} results to Supabase...`);
+  if (scrapedJobs.length > 0) {
+    const { error } = await supabase.from('jobs').upsert(scrapedJobs);
+    if (error) {
+      throw new Error(`Failed to upsert jobs into Supabase: ${error.message}`);
+    }
+    console.log('Successfully saved to Supabase database!');
+  } else {
+    console.log('No new jobs matched the filters. Nothing to save.');
+  }
 }
 
-runScraper();
+runScraper().catch(err => {
+  console.error('Scraper execution failed:', err.message);
+  process.exit(1);
+});
