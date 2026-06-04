@@ -3,7 +3,10 @@
  */
 
 // Python AI backend URL — change this if deploying remotely
-const AI_SERVER_URL = 'http://localhost:5000';
+// Automatically switches between local testing and your live Vercel backend
+const AI_SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://backend-job-search-sigma.vercel.app';
 
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
@@ -538,7 +541,7 @@ function getRelativeTimeString(dateString) {
   const now = new Date();
   const diffMs = now - date;
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays <= 0) {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     if (diffHours <= 0) {
