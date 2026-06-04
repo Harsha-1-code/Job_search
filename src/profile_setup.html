@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teak — Candidate Onboarding & Resume Parser</title>
-  <link rel="stylesheet" href="src/index.css">
+  <link rel="stylesheet" href="/index.css">
   <style>
     body {
       display: flex;
@@ -15,6 +16,7 @@
       margin: 0;
       font-family: var(--font-sans);
     }
+
     .setup-container {
       width: 100%;
       max-width: 650px;
@@ -27,9 +29,11 @@
       flex-direction: column;
       gap: 24px;
     }
+
     .setup-header {
       text-align: center;
     }
+
     .setup-logo {
       font-size: 28px;
       font-weight: 700;
@@ -37,22 +41,26 @@
       margin-bottom: 8px;
       font-family: var(--font-title);
     }
+
     .setup-title {
       font-size: 20px;
       font-weight: 600;
       color: white;
       margin: 0;
     }
+
     .setup-subtitle {
       font-size: 13px;
       color: var(--text-secondary);
       margin-top: 6px;
     }
+
     .setup-form-group {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
+
     .setup-form-group label {
       font-size: 11px;
       font-weight: 600;
@@ -60,7 +68,9 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    .setup-input, .setup-textarea {
+
+    .setup-input,
+    .setup-textarea {
       background-color: var(--bg-primary);
       border: 1px solid var(--border-color);
       color: white;
@@ -70,14 +80,18 @@
       outline: none;
       transition: border-color 0.2s;
     }
-    .setup-input:focus, .setup-textarea:focus {
+
+    .setup-input:focus,
+    .setup-textarea:focus {
       border-color: var(--color-accent);
     }
+
     .setup-textarea {
       min-height: 150px;
       resize: vertical;
       font-family: monospace;
     }
+
     .btn-parse {
       display: flex;
       justify-content: center;
@@ -94,14 +108,17 @@
       font-size: 14px;
       transition: opacity 0.2s;
     }
+
     .btn-parse:hover {
       opacity: 0.9;
     }
+
     .btn-parse:disabled {
       background-color: var(--border-color);
       color: var(--text-muted);
       cursor: not-allowed;
     }
+
     .parsed-results-panel {
       border-top: 1px solid var(--border-color);
       padding-top: 20px;
@@ -110,6 +127,7 @@
       flex-direction: column;
       gap: 16px;
     }
+
     .btn-row {
       display: flex;
       gap: 12px;
@@ -117,19 +135,22 @@
     }
   </style>
 </head>
+
 <body>
 
   <div class="setup-container">
     <div class="setup-header">
       <div class="setup-logo">🪵 Teak</div>
       <h2 class="setup-title">Initialize Candidate Profile</h2>
-      <p class="setup-subtitle">Let's seed your profile details. Paste your raw resume below to auto-parse details via Hugging Face AI.</p>
+      <p class="setup-subtitle">Let's seed your profile details. Paste your raw resume below to auto-parse details via
+        Hugging Face AI.</p>
     </div>
 
     <!-- Paste Resume Section -->
     <div class="setup-form-group">
       <label for="raw-resume-input">Raw Resume / Profile text</label>
-      <textarea id="raw-resume-input" class="setup-textarea" placeholder="Paste your raw resume text here..."></textarea>
+      <textarea id="raw-resume-input" class="setup-textarea"
+        placeholder="Paste your raw resume text here..."></textarea>
     </div>
 
     <button id="btn-parse-resume" class="btn-parse">
@@ -139,7 +160,7 @@
     <!-- Parsed Results Grid (Hidden by default) -->
     <div id="parsed-results" class="parsed-results-panel">
       <h3 style="color: white; font-size: 15px; margin: 0;">Confirm Parsed Details</h3>
-      
+
       <div class="setup-form-group">
         <label for="parsed-name">Full Name</label>
         <input type="text" id="parsed-name" class="setup-input">
@@ -164,7 +185,7 @@
   </div>
 
   <script>
-    const AI_SERVER_URL = 'http://localhost:5000';
+    const AI_SERVER_URL = 'https://backend-job-search-kappa.vercel.app';
     const currentUser = JSON.parse(localStorage.getItem('teak_current_user'));
 
     if (!currentUser) {
@@ -278,4 +299,5 @@
     });
   </script>
 </body>
+
 </html>

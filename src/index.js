@@ -3,7 +3,7 @@
  */
 
 // Python AI backend URL 
-const AI_SERVER_URL = 'https://backend-job-search-sigma.vercel.app';
+const AI_SERVER_URL = 'https://backend-job-search-kappa.vercel.app';
 
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
