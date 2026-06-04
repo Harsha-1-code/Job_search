@@ -310,6 +310,10 @@ SEED_JOBS.forEach((job, index) => {
   job.posted_at = date.toISOString();
 });
 
+// Master lists for card deck tracking
+let MASTER_JOBS_DECK = [...SEED_JOBS];
+let passedJobIds = new Set(JSON.parse(localStorage.getItem('teak_passed_jobs')) || []);
+
 let activeJobs = [...SEED_JOBS];
 let currentJobIndex = 0;
 let currentTailoringMode = 'normal';
@@ -630,6 +634,8 @@ function performSwipe(direction) {
   if (direction === 'pass') {
     card.style.transform = "translateX(-200px) rotate(-15deg)";
     card.style.opacity = "0";
+    passedJobIds.add(currentJob.id);
+    localStorage.setItem('teak_passed_jobs', JSON.stringify([...passedJobIds]));
     showNotification("Job passed 👎");
   } else if (direction === 'apply') {
     card.style.transform = "translateX(200px) rotate(15deg)";
@@ -653,8 +659,7 @@ function performSwipe(direction) {
   }
 
   setTimeout(() => {
-    currentJobIndex++;
-    renderJobCard();
+    updateSearchFilters();
   }, 250);
 }
 
@@ -853,7 +858,14 @@ function updateSearchFilters() {
   const scoreF = parseInt(document.getElementById("filter-match-score").value);
   const locTypeF = document.getElementById("filter-location-type").value;
 
-  activeJobs = SEED_JOBS.filter(job => {
+  activeJobs = MASTER_JOBS_DECK.filter(job => {
+    // Exclude passed or saved/applied/pipeline jobs
+    if (passedJobIds.has(job.id)) return false;
+    if (pipeline.saved.some(j => j.id === job.id)) return false;
+    if (pipeline.applied.some(j => j.id === job.id)) return false;
+    if (pipeline.interviewing.some(j => j.id === job.id)) return false;
+    if (pipeline.offer.some(j => j.id === job.id)) return false;
+
     const matchesTitle = job.title.toLowerCase().includes(titleQuery);
     const matchesLocation = job.location.toLowerCase().includes(locQuery);
 
@@ -964,9 +976,7 @@ async function runManualScraper() {
           };
         });
 
-        activeJobs = [...SEED_JOBS, ...newJobs];
-        currentJobIndex = 0;
-        renderJobCard();
+        MASTER_JOBS_DECK = [...SEED_JOBS, ...newJobs];
         updateSearchFilters();
 
         setTimeout(() => {
