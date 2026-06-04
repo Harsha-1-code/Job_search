@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teak — Candidate Onboarding & Resume Parser</title>
+  <link rel="stylesheet" href="src/index.css">
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: var(--bg-primary);
+      margin: 0;
+      font-family: var(--font-sans);
+    }
+    .setup-container {
+      width: 100%;
+      max-width: 650px;
+      padding: 40px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .setup-header {
+      text-align: center;
+    }
+    .setup-logo {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--color-accent);
+      margin-bottom: 8px;
+      font-family: var(--font-title);
+    }
+    .setup-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: white;
+      margin: 0;
+    }
+    .setup-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+    .setup-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .setup-form-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .setup-input, .setup-textarea {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .setup-input:focus, .setup-textarea:focus {
+      border-color: var(--color-accent);
+    }
+    .setup-textarea {
+      min-height: 150px;
+      resize: vertical;
+      font-family: monospace;
+    }
+    .btn-parse {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      background-color: var(--color-accent);
+      color: black;
+      font-weight: 600;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: opacity 0.2s;
+    }
+    .btn-parse:hover {
+      opacity: 0.9;
+    }
+    .btn-parse:disabled {
+      background-color: var(--border-color);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+    .parsed-results-panel {
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+      margin-top: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="setup-container">
+    <div class="setup-header">
+      <div class="setup-logo">🪵 Teak</div>
+      <h2 class="setup-title">Initialize Candidate Profile</h2>
+      <p class="setup-subtitle">Let's seed your profile details. Paste your raw resume below to auto-parse details via Hugging Face AI.</p>
+    </div>
+
+    <!-- Paste Resume Section -->
+    <div class="setup-form-group">
+      <label for="raw-resume-input">Raw Resume / Profile text</label>
+      <textarea id="raw-resume-input" class="setup-textarea" placeholder="Paste your raw resume text here..."></textarea>
+    </div>
+
+    <button id="btn-parse-resume" class="btn-parse">
+      <span>Parse Resume via HF Model ⚡</span>
+    </button>
+
+    <!-- Parsed Results Grid (Hidden by default) -->
+    <div id="parsed-results" class="parsed-results-panel">
+      <h3 style="color: white; font-size: 15px; margin: 0;">Confirm Parsed Details</h3>
+      
+      <div class="setup-form-group">
+        <label for="parsed-name">Full Name</label>
+        <input type="text" id="parsed-name" class="setup-input">
+      </div>
+
+      <div class="setup-form-group">
+        <label for="parsed-education">Education Details</label>
+        <input type="text" id="parsed-education" class="setup-input">
+      </div>
+
+      <div class="setup-form-group">
+        <label for="parsed-skills">Skills (Comma-separated)</label>
+        <input type="text" id="parsed-skills" class="setup-input">
+      </div>
+
+      <div class="btn-row">
+        <button id="btn-submit-profile" class="btn-parse" style="width: auto; padding: 10px 24px;">
+          Complete Setup & Enter Dashboard →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const AI_SERVER_URL = 'http://localhost:5000';
+    const currentUser = JSON.parse(localStorage.getItem('teak_current_user'));
+
+    if (!currentUser) {
+      // Redirect to main gateway if not authenticated
+      window.location.href = 'index.html';
+    }
+
+    const btnParse = document.getElementById('btn-parse-resume');
+    const btnSubmit = document.getElementById('btn-submit-profile');
+    const rawResumeInput = document.getElementById('raw-resume-input');
+    const parsedPanel = document.getElementById('parsed-results');
+
+    btnParse.addEventListener('click', async () => {
+      const rawText = rawResumeInput.value.trim();
+      if (!rawText) {
+        alert('Please paste your resume text first!');
+        return;
+      }
+
+      btnParse.disabled = true;
+      btnParse.innerText = 'Parsing with Hugging Face... ⏳';
+
+      try {
+        const response = await fetch(`${AI_SERVER_URL}/api/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: currentUser.email,
+            rawResume: rawText
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to parse resume');
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          // Populate fields
+          document.getElementById('parsed-name').value = data.profile.full_name;
+          document.getElementById('parsed-education').value = data.profile.education;
+          document.getElementById('parsed-skills').value = data.profile.skills;
+
+          // Reveal results panel
+          parsedPanel.style.display = 'flex';
+          btnParse.innerText = 'Re-parse Resume ⚡';
+        } else {
+          throw new Error(data.error || 'Unknown parsing error');
+        }
+      } catch (err) {
+        alert('Error parsing resume: ' + err.message + '. Please enter details manually.');
+        // Still open form for manual entry fallback
+        document.getElementById('parsed-name').value = currentUser.name || '';
+        document.getElementById('parsed-education').value = '';
+        document.getElementById('parsed-skills').value = '';
+        parsedPanel.style.display = 'flex';
+        btnParse.innerText = 'Parse Resume ⚡';
+      } finally {
+        btnParse.disabled = false;
+      }
+    });
+
+    btnSubmit.addEventListener('click', async () => {
+      const fullName = document.getElementById('parsed-name').value.trim();
+      const education = document.getElementById('parsed-education').value.trim();
+      const skills = document.getElementById('parsed-skills').value.trim();
+      const rawText = rawResumeInput.value.trim();
+
+      if (!fullName) {
+        alert('Full name is required!');
+        return;
+      }
+
+      btnSubmit.disabled = true;
+      btnSubmit.innerText = 'Saving profile...';
+
+      try {
+        const response = await fetch(`${AI_SERVER_URL}/api/profile/${currentUser.email}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            full_name: fullName,
+            education: education,
+            skills: skills,
+            raw_resume: rawText
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update profile details');
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          // Update local session
+          currentUser.name = fullName;
+          localStorage.setItem('teak_current_user', JSON.stringify(currentUser));
+          localStorage.setItem('teak_base_resume', rawText);
+
+          // Redirect to dashboard
+          window.location.href = 'index.html';
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (err) {
+        alert('Error saving profile: ' + err.message);
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = 'Complete Setup & Enter Dashboard →';
+      }
+    });
+  </script>
+</body>
+</html>

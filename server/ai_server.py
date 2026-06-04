@@ -323,6 +323,129 @@ def get_jobs():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/profile", methods=["POST"])
+def parse_and_save_profile():
+    """Parse raw resume text using Hugging Face model and save to Supabase."""
+    data = request.get_json(force=True)
+    email = data.get("email", "").strip().lower()
+    raw_resume = data.get("rawResume", "").strip()
+
+    if not email or not raw_resume:
+        return jsonify({"error": "Email and rawResume are required fields."}), 400
+
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "Supabase credentials are not configured on the server."}), 500
+
+    prompt = (
+        "You are an expert ATS resume parser. Extract the candidate's personal details, education details, and skills from their resume text.\n"
+        "Return the output as a valid JSON object ONLY, with the following keys and no extra formatting or markdown code blocks:\n"
+        "- full_name (string)\n"
+        "- education (string)\n"
+        "- skills (comma-separated list of skills)\n\n"
+        f"Resume text:\n{raw_resume}"
+    )
+
+    try:
+        llm_response = generate_text(prompt)
+        text = llm_response.get("text", "").strip()
+        
+        # Clean up any potential markdown formatting from LLM (e.g. ```json ... ```)
+        if text.startswith("```"):
+            lines = text.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+
+        parsed_data = json.loads(text)
+    except Exception as e:
+        print(f"Extraction failed: {str(e)}")
+        parsed_data = {
+            "full_name": email.split("@")[0].title(),
+            "education": "Not parsed. Click Edit to update.",
+            "skills": "Not parsed. Click Edit to update."
+        }
+
+    # Write to Supabase table `user_profiles`
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
+    }
+    url = f"{SUPABASE_URL}/rest/v1/user_profiles"
+    payload = {
+        "email": email,
+        "full_name": parsed_data.get("full_name", email.split("@")[0].title()),
+        "education": parsed_data.get("education", ""),
+        "skills": parsed_data.get("skills", ""),
+        "raw_resume": raw_resume
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        if not resp.ok:
+            return jsonify({"error": f"Supabase error: {resp.text}"}), resp.status_code
+        return jsonify({"success": True, "profile": payload})
+    except Exception as e:
+        return jsonify({"error": f"Failed to save profile: {str(e)}"}), 500
+
+
+@app.route("/api/profile/<email>", methods=["GET"])
+def get_profile(email):
+    """Retrieve user profile from Supabase."""
+    email = email.strip().lower()
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "Supabase credentials are not configured on the server."}), 500
+
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    }
+    url = f"{SUPABASE_URL}/rest/v1/user_profiles?email=eq.{email}"
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if not resp.ok:
+            return jsonify({"error": f"Supabase error: {resp.text}"}), resp.status_code
+        profiles = resp.json()
+        if not profiles:
+            return jsonify({"success": False, "message": "Profile not found"}), 404
+        return jsonify({"success": True, "profile": profiles[0]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/profile/<email>", methods=["PUT"])
+def update_profile(email):
+    """Update user profile in Supabase."""
+    email = email.strip().lower()
+    data = request.get_json(force=True)
+
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "Supabase credentials are not configured on the server."}), 500
+
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json"
+    }
+    url = f"{SUPABASE_URL}/rest/v1/user_profiles?email=eq.{email}"
+    payload = {
+        "full_name": data.get("full_name"),
+        "education": data.get("education"),
+        "skills": data.get("skills"),
+        "raw_resume": data.get("raw_resume")
+    }
+    try:
+        resp = requests.patch(url, headers=headers, json=payload, timeout=10)
+        if not resp.ok:
+            return jsonify({"error": f"Supabase error: {resp.text}"}), resp.status_code
+        return jsonify({"success": True, "profile": payload})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ===================================================================
 #  Entry point
 # ===================================================================

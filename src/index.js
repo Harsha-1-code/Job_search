@@ -443,7 +443,7 @@ function handleAuthSubmit() {
   }
 }
 
-function loginUser(user) {
+async function loginUser(user) {
   localStorage.setItem('teak_current_user', JSON.stringify(user));
 
   document.querySelector(".profile-name").innerText = user.name;
@@ -454,6 +454,37 @@ function loginUser(user) {
 
   document.getElementById("prof-name").value = user.name;
   document.getElementById("prof-email").value = user.email;
+
+  // Load user profile from Supabase
+  try {
+    const response = await fetch(`${AI_SERVER_URL}/api/profile/${user.email}`);
+    if (response.status === 404) {
+      // User has no profile, redirect to onboarding setup page
+      window.location.href = 'profile_setup.html';
+      return;
+    }
+    if (!response.ok) throw new Error("Failed to load user profile");
+
+    const data = await response.json();
+    if (data.success && data.profile) {
+      const prof = data.profile;
+      // Update local cache and values
+      BASE_RESUME = prof.raw_resume || "";
+      localStorage.setItem('teak_base_resume', BASE_RESUME);
+
+      document.getElementById("prof-name").value = prof.full_name || user.name;
+      document.getElementById("prof-education").value = prof.education || "";
+      document.getElementById("prof-skills").value = prof.skills || "";
+      document.getElementById("prof-resume").value = BASE_RESUME;
+
+      // Synchronize session details if names changed
+      user.name = prof.full_name || user.name;
+      localStorage.setItem('teak_current_user', JSON.stringify(user));
+      document.querySelector(".profile-name").innerText = user.name;
+    }
+  } catch (err) {
+    console.error("Profile load failed:", err);
+  }
 
   document.getElementById("auth-gateway").classList.add("hidden");
 }
@@ -547,11 +578,21 @@ function renderJobCard() {
   document.getElementById("match-score-display").innerText = `${job.matchScore}%`;
   document.getElementById("careers-link-btn").href = job.careersUrl || job.url;
 
+  // Render location
+  const locEl = document.getElementById("job-location-display");
+  if (locEl) {
+    const svgIcon = locEl.querySelector('svg');
+    const svgHTML = svgIcon ? svgIcon.outerHTML : '';
+    locEl.innerHTML = svgHTML + ' ' + escapeHTML(job.location || 'Remote');
+  }
+
   // Render relative posted time
   const relativeTime = getRelativeTimeString(job.posted_at || job.postedAt);
   const timeEl = document.getElementById("posted-time-display");
   if (timeEl) {
-    timeEl.innerText = relativeTime ? `• ${relativeTime}` : '';
+    const svgIcon = timeEl.querySelector('svg');
+    const svgHTML = svgIcon ? svgIcon.outerHTML : '';
+    timeEl.innerHTML = relativeTime ? svgHTML + ' Posted ' + escapeHTML(relativeTime) : '';
   }
 
   // Render Required Qualifications
@@ -1258,15 +1299,53 @@ function setupEventListeners() {
   });
 
   // Profiles settings
-  document.getElementById("btn-save-profile").addEventListener("click", () => {
-    BASE_RESUME = document.getElementById("prof-resume").value;
-    localStorage.setItem('teak_base_resume', BASE_RESUME);
+  document.getElementById("btn-save-profile").addEventListener("click", async () => {
+    const rawResume = document.getElementById("prof-resume").value;
+    const fullName = document.getElementById("prof-name").value.trim();
+    const email = document.getElementById("prof-email").value.trim().toLowerCase();
+    const education = document.getElementById("prof-education").value.trim();
+    const skills = document.getElementById("prof-skills").value.trim();
 
-    // Save profile metadata
-    document.querySelector(".profile-name").innerText = document.getElementById("prof-name").value;
-    document.querySelector(".profile-email").innerText = document.getElementById("prof-email").value;
+    if (!fullName || !email) {
+      showNotification("Name and Email are required!");
+      return;
+    }
 
-    showNotification("Profile database cached! 🌱");
+    try {
+      const response = await fetch(`${AI_SERVER_URL}/api/profile/${email}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName,
+          education: education,
+          skills: skills,
+          raw_resume: rawResume
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to save changes to Supabase");
+
+      const data = await response.json();
+      if (data.success) {
+        BASE_RESUME = rawResume;
+        localStorage.setItem('teak_base_resume', BASE_RESUME);
+
+        // Update local session
+        const activeUser = JSON.parse(localStorage.getItem('teak_current_user')) || {};
+        activeUser.name = fullName;
+        activeUser.email = email;
+        localStorage.setItem('teak_current_user', JSON.stringify(activeUser));
+
+        document.querySelector(".profile-name").innerText = fullName;
+        document.querySelector(".profile-email").innerText = email;
+
+        showNotification("Profile updated in Supabase! 🌱");
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      showNotification(`Failed to save profile: ${err.message}`);
+    }
   });
 
   // API settings
