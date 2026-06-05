@@ -3,7 +3,9 @@
  */
 
 // Python AI backend URL — change this if deploying remotely
-const AI_SERVER_URL = 'http://localhost:5000';
+const AI_SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://server-xi-sable-49.vercel.app';
 
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
