@@ -1815,9 +1815,16 @@ function setupChatbot() {
     try {
       const systemPrompt = `You are Teak AI Assistant, a helpful chatbot for the Teak job search platform. Teak is an AI-powered job board that helps candidates find tech jobs, tailor resumes using LLMs, manage applications via a Kanban board, generate outreach messages for recruiters, and draft email replies. The app has these sections: Jobs (swipe deck), Applications (Kanban), Outreach (recruiter messaging), Emails (follow-up drafts), Skipped (last 30 passed jobs), and Profile & Keys (settings). Keep answers concise and helpful. If asked about something unrelated to job searching or the app, politely redirect.`;
 
-      const result = await callAIBackend('/api/generate', {
-        prompt: `${systemPrompt}\n\nUser question: ${userText}\n\nRespond helpfully and concisely.`
-      });
+      // Map chat messages to the format expected by the backend
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...chatMessages.map(msg => ({
+          role: msg.role === 'bot' ? 'assistant' : msg.role,
+          content: msg.text
+        }))
+      ];
+
+      const result = await callAIBackend('/api/chat', { messages });
 
       removeTypingIndicator();
       addBotMessage(stripMarkdown(result.text));

@@ -89,6 +89,59 @@ def generate_with_ollama(prompt: str) -> str:
     return text
 
 
+def chat_with_huggingface(messages: list) -> str:
+    """Call Hugging Face OpenAI-compatible Chat Completions API with conversational history."""
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if HF_API_TOKEN:
+        headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
+
+    payload = {
+        "model": HF_MODEL,
+        "messages": messages,
+        "max_tokens": 1500,
+        "temperature": 0.7,
+    }
+    resp = requests.post(url, json=payload, headers=headers, timeout=120)
+
+    if not resp.ok:
+        raise RuntimeError(f"HuggingFace API {resp.status_code}: {resp.text[:300]}")
+
+    data = resp.json()
+    if "choices" in data and len(data["choices"]) > 0:
+        text = data["choices"][0]["message"]["content"]
+    else:
+        raise RuntimeError(f"HuggingFace returned unexpected format: {data}")
+
+    if not text:
+        raise RuntimeError("HuggingFace returned empty response")
+
+    return text
+
+
+def chat_with_ollama(messages: list) -> str:
+    """Call a local Ollama instance for fully offline chat generation."""
+    url = f"{OLLAMA_BASE_URL}/api/chat"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": messages,
+        "stream": False,
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=120)
+    except requests.ConnectionError:
+        raise RuntimeError("Ollama not running — start it with `ollama serve`")
+
+    if not resp.ok:
+        raise RuntimeError(f"Ollama {resp.status_code}: {resp.text[:300]}")
+
+    data = resp.json()
+    text = data.get("message", {}).get("content", "")
+    if not text:
+        raise RuntimeError("Ollama returned empty response")
+    return text
+
+
 # ===================================================================
 #  Unified generation with automatic provider cascade
 # ===================================================================
@@ -97,6 +150,11 @@ def generate_with_ollama(prompt: str) -> str:
 PROVIDERS = [
     ("huggingface", generate_with_huggingface),
     ("ollama", generate_with_ollama),
+]
+
+CHAT_PROVIDERS = [
+    ("huggingface", chat_with_huggingface),
+    ("ollama", chat_with_ollama),
 ]
 
 
@@ -116,6 +174,29 @@ def generate_text(prompt: str, preferred_provider: str | None = None) -> dict:
     for name, fn in ordered:
         try:
             result = fn(prompt)
+            return {"text": result, "provider": name}
+        except Exception as e:
+            errors[name] = str(e)
+
+    # All providers failed
+    raise RuntimeError(json.dumps(errors))
+
+
+def chat_text(messages: list, preferred_provider: str | None = None) -> dict:
+    """
+    Try providers in cascade order for conversational chat history.
+    Returns {"text": ..., "provider": ...} on success.
+    """
+    errors = {}
+
+    # Build ordered provider list — preferred one goes first
+    ordered = list(CHAT_PROVIDERS)
+    if preferred_provider:
+        ordered.sort(key=lambda p: 0 if p[0] == preferred_provider else 1)
+
+    for name, fn in ordered:
+        try:
+            result = fn(messages)
             return {"text": result, "provider": name}
         except Exception as e:
             errors[name] = str(e)
@@ -295,6 +376,23 @@ def raw_generate():
 
     try:
         result = generate_text(prompt, preferred_provider=provider)
+        return jsonify({"success": True, **result})
+    except RuntimeError as e:
+        return jsonify({"success": False, "error": str(e)}), 502
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat_generate():
+    """Conversational text generation — send a history of messages."""
+    data = request.get_json(force=True)
+    messages = data.get("messages", [])
+    provider = data.get("provider")
+
+    if not messages:
+        return jsonify({"error": "Missing messages"}), 400
+
+    try:
+        result = chat_text(messages, preferred_provider=provider)
         return jsonify({"success": True, **result})
     except RuntimeError as e:
         return jsonify({"success": False, "error": str(e)}), 502
