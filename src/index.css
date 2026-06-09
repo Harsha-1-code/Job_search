@@ -1378,10 +1378,10 @@ body::before {
    ============================================================ */
 
 .chatbot-container {
-  position: static;
-  width: 0;
-  height: 0;
-  overflow: visible;
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 5500;
 }
 
 .chat-fab {
