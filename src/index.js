@@ -562,6 +562,74 @@ function getRelativeTimeString(dateString) {
 }
 
 // Render active card with stacking backdrops
+// function renderJobCard() {
+//   const cardContainer = document.getElementById("job-card");
+//   const emptyState = document.getElementById("empty-state");
+//   const back1 = document.querySelector(".stacked-card-back-1");
+//   const back2 = document.querySelector(".stacked-card-back-2");
+
+//   if (currentJobIndex >= activeJobs.length) {
+//     cardContainer.style.display = "none";
+//     emptyState.style.display = "flex";
+//     if (back1) back1.style.display = "none";
+//     if (back2) back2.style.display = "none";
+//     return;
+//   }
+
+//   cardContainer.style.display = "flex";
+//   emptyState.style.display = "none";
+//   if (back1) back1.style.display = "block";
+//   if (back2) back2.style.display = "block";
+
+//   const job = activeJobs[currentJobIndex];
+
+//   document.getElementById("company-logo-char").innerText = job.company.charAt(0);
+//   document.getElementById("job-title-display").innerText = job.title;
+//   document.getElementById("company-name-display").innerText = job.company;
+//   document.getElementById("ats-badge").innerText = job.ats;
+//   document.getElementById("match-score-display").innerText = `${job.matchScore}%`;
+//   document.getElementById("careers-link-btn").href = job.careersUrl || job.url;
+
+//   // Render location
+//   const locEl = document.getElementById("job-location-display");
+//   if (locEl) {
+//     const svgIcon = locEl.querySelector('svg');
+//     const svgHTML = svgIcon ? svgIcon.outerHTML : '';
+//     locEl.innerHTML = svgHTML + ' ' + escapeHTML(job.location || 'Remote');
+//   }
+
+//   // Render relative posted time
+//   const relativeTime = getRelativeTimeString(job.posted_at || job.postedAt);
+//   const timeEl = document.getElementById("posted-time-display");
+//   if (timeEl) {
+//     const svgIcon = timeEl.querySelector('svg');
+//     const svgHTML = svgIcon ? svgIcon.outerHTML : '';
+//     timeEl.innerHTML = relativeTime ? svgHTML + ' Posted ' + escapeHTML(relativeTime) : '';
+//   }
+
+//   // Render Required Qualifications
+//   const reqContainer = document.getElementById("required-qualifications-list");
+//   reqContainer.innerHTML = "";
+//   job.qualifications.forEach(q => {
+//     const li = document.createElement("li");
+//     li.innerText = q;
+//     reqContainer.appendChild(li);
+//   });
+
+//   // Render Desired Qualifications
+//   const desContainer = document.getElementById("desired-qualifications-list");
+//   desContainer.innerHTML = "";
+//   job.desired.forEach(d => {
+//     const li = document.createElement("li");
+//     li.innerText = d;
+//     desContainer.appendChild(li);
+//   });
+
+//   // Dynamically update background stacking offset/scale
+//   cardContainer.style.transform = "none";
+//   cardContainer.style.opacity = "1";
+// }
+// Render active card with stacking backdrops
 function renderJobCard() {
   const cardContainer = document.getElementById("job-card");
   const emptyState = document.getElementById("empty-state");
@@ -576,7 +644,11 @@ function renderJobCard() {
     return;
   }
 
+  // FORCE DYNAMIC LAYOUT FLEXIBILITY FOR CHROMIUM CONTEXTS
   cardContainer.style.display = "flex";
+  cardContainer.style.width = "100%";
+  cardContainer.style.maxWidth = "48rem"; // Equivalent to Tailwind max-w-3xl
+
   emptyState.style.display = "none";
   if (back1) back1.style.display = "block";
   if (back2) back2.style.display = "block";
@@ -590,7 +662,7 @@ function renderJobCard() {
   document.getElementById("match-score-display").innerText = `${job.matchScore}%`;
   document.getElementById("careers-link-btn").href = job.careersUrl || job.url;
 
-  // Render location
+  // Render location safely
   const locEl = document.getElementById("job-location-display");
   if (locEl) {
     const svgIcon = locEl.querySelector('svg');
@@ -625,7 +697,7 @@ function renderJobCard() {
     desContainer.appendChild(li);
   });
 
-  // Dynamically update background stacking offset/scale
+  // Reset transformation properties fluidly to clear sliding offsets
   cardContainer.style.transform = "none";
   cardContainer.style.opacity = "1";
 }
@@ -1261,18 +1333,18 @@ function downloadOptimizedResume() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  
+
   // Set font
   doc.setFont("helvetica");
-  
+
   // Basic text wrapping setup
   const margin = 15;
   const pageWidth = doc.internal.pageSize.getWidth();
   const maxLineWidth = pageWidth - margin * 2;
   const textLines = doc.splitTextToSize(content, maxLineWidth);
-  
+
   let cursorY = 20;
-  
+
   textLines.forEach(line => {
     if (cursorY > doc.internal.pageSize.getHeight() - 20) {
       doc.addPage();
@@ -1281,7 +1353,7 @@ function downloadOptimizedResume() {
     doc.text(line, margin, cursorY);
     cursorY += 6; // line height
   });
-  
+
   doc.save(fileName);
   showNotification("Tailored artifact downloaded successfully!");
 }
