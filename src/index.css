@@ -43,6 +43,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans);
   overflow: hidden;
+  width: 100%;
   height: 100vh;
   display: flex;
   position: relative;
@@ -237,6 +238,7 @@ body::before {
 /* Main Dashboard Layout */
 .dashboard-container {
   flex-grow: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -393,6 +395,7 @@ body::before {
 /* Page navigation structures */
 .dashboard-content-area {
   flex-grow: 1;
+  min-width: 0;
   position: relative;
   overflow: hidden;
 }
