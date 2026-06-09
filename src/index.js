@@ -1249,21 +1249,40 @@ EXPERIENCE & SELECTED PROJECTS:
   }, 600);
 }
 
-// Download tailored file
+// Download tailored file as PDF
 function downloadOptimizedResume() {
   const content = document.getElementById("tab-optimized-content").innerText;
-  const fileName = currentTailoringMode === 'heavy' ? 'cover-letter.md' : 'tailored-resume.md';
+  const fileName = currentTailoringMode === 'heavy' ? 'cover-letter.pdf' : 'tailored-resume.pdf';
 
-  const blob = new Blob([content], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  if (!window.jspdf) {
+    alert("PDF generator not loaded yet. Please try again.");
+    return;
+  }
 
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  
+  // Set font
+  doc.setFont("helvetica");
+  
+  // Basic text wrapping setup
+  const margin = 15;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const maxLineWidth = pageWidth - margin * 2;
+  const textLines = doc.splitTextToSize(content, maxLineWidth);
+  
+  let cursorY = 20;
+  
+  textLines.forEach(line => {
+    if (cursorY > doc.internal.pageSize.getHeight() - 20) {
+      doc.addPage();
+      cursorY = 20;
+    }
+    doc.text(line, margin, cursorY);
+    cursorY += 6; // line height
+  });
+  
+  doc.save(fileName);
   showNotification("Tailored artifact downloaded successfully!");
 }
 
