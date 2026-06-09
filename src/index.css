@@ -1358,6 +1358,13 @@ body::before {
    AI Assistant Chatbot Styles
    ============================================================ */
 
+.chatbot-container {
+  position: static;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
 .chat-fab {
   position: fixed;
   bottom: 28px;
