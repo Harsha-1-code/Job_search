@@ -55,6 +55,14 @@
         <span>Emails</span>
       </div>
 
+      <div class="nav-item" id="nav-skipped">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Skipped</span>
+      </div>
+
       <div class="nav-item" id="nav-profile">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -333,6 +341,16 @@
               </div>
             </div>
 
+            <!-- Email Display Row -->
+            <div class="outreach-email-row" id="outreach-email-row">
+              <svg class="email-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <span class="email-address" id="contact-detail-email">recruiter@company.com</span>
+              <button class="btn-copy-email" id="btn-copy-recruiter-email" title="Copy email">Copy</button>
+              <button class="btn-mailto" id="btn-mailto-recruiter" title="Send email">Email</button>
+            </div>
+
             <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label
@@ -411,6 +429,17 @@
         </div>
       </section>
 
+      <!-- Skipped Jobs Section -->
+      <section class="page-section" id="section-skipped">
+        <h2 style="font-family: var(--font-title); font-size: 24px; font-weight: 600; margin-bottom: 4px;">Skipped Jobs
+          History</h2>
+        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 4px;">Review your last 30 skipped jobs.
+          Restore any back to the active deck if you change your mind.</p>
+        <div id="skipped-jobs-container" class="skipped-jobs-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
       <!-- Profile & API Settings Section -->
       <section class="page-section" id="section-profile">
         <h2 style="font-family: var(--font-title); font-size: 24px; font-weight: 600; margin-bottom: 4px;">User Profile
@@ -452,7 +481,8 @@
               <textarea id="prof-resume" style="min-height: 180px; font-family: monospace; font-size: 12px;"></textarea>
             </div>
 
-            <div style="display: flex; justify-content: flex-end;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+              <button class="btn-utility danger" id="btn-delete-account">Delete Account</button>
               <button class="btn-utility primary" id="btn-save-profile">Save Profile Settings</button>
             </div>
           </div>
@@ -673,6 +703,37 @@
         <span id="auth-switch-text">New to Teak?</span>
         <button type="button" class="auth-switch-link" id="auth-toggle-btn">Create an account</button>
       </div>
+    </div>
+  </div>
+
+  <!-- AI Assistant Chatbot Widget -->
+  <button class="chat-fab" id="chat-fab" title="AI Assistant">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  </button>
+
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-panel-header">
+      <div class="chat-avatar">🤖</div>
+      <div class="chat-header-info">
+        <span class="chat-header-title">Teak AI Assistant</span>
+        <span class="chat-header-status">Online</span>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <!-- Dynamically populated -->
+    </div>
+    <div class="chat-suggestions" id="chat-suggestions">
+      <!-- Dynamically populated -->
+    </div>
+    <div class="chat-input-bar">
+      <input type="text" id="chat-input" placeholder="Ask me anything about Teak..." autocomplete="off">
+      <button class="chat-send-btn" id="chat-send-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m0 0l-7 7m7-7l7 7" />
+        </svg>
+      </button>
     </div>
   </div>
 

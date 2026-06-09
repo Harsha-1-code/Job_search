@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teak — Candidate Onboarding & Resume Parser</title>
   <link rel="stylesheet" href="src/index.css">
+  <!-- PDF.js for PDF text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Mammoth.js for DOCX text extraction -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
   <style>
     body {
       display: flex;
@@ -133,6 +137,182 @@
       gap: 12px;
       justify-content: flex-end;
     }
+
+    /* File Upload Zone Styles */
+    .upload-mode-toggle {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 4px;
+    }
+
+    .upload-mode-toggle .mode-tab {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      background: none;
+    }
+
+    .upload-mode-toggle .mode-tab:hover {
+      color: var(--text-secondary);
+    }
+
+    .upload-mode-toggle .mode-tab.active {
+      color: var(--color-accent);
+      background-color: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+
+    .file-drop-zone {
+      border: 2px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background-color: rgba(255, 255, 255, 0.01);
+      position: relative;
+    }
+
+    .file-drop-zone:hover,
+    .file-drop-zone.drag-over {
+      border-color: var(--color-accent);
+      background-color: rgba(16, 185, 129, 0.04);
+    }
+
+    .file-drop-zone.drag-over {
+      transform: scale(1.01);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+    }
+
+    .file-drop-zone .drop-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(59, 130, 246, 0.1));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .file-drop-zone .drop-icon svg {
+      width: 24px;
+      height: 24px;
+      color: var(--color-accent);
+    }
+
+    .file-drop-zone .drop-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .file-drop-zone .drop-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .file-drop-zone .drop-formats {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .file-drop-zone .format-badge {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background-color: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+    }
+
+    .file-drop-zone input[type="file"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* File selected state */
+    .file-info-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background-color: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.15);
+      border-radius: 8px;
+      font-size: 12.5px;
+      color: var(--color-accent);
+      font-weight: 500;
+    }
+
+    .file-info-bar .file-name {
+      flex-grow: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-info-bar .file-size {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .file-info-bar .btn-remove-file {
+      background: none;
+      border: none;
+      color: var(--color-red);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .file-info-bar .btn-remove-file:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+    }
+
+    .extraction-status {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      border-radius: 6px;
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .extraction-status .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(16, 185, 129, 0.2);
+      border-top-color: var(--color-accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 
@@ -142,15 +322,62 @@
     <div class="setup-header">
       <div class="setup-logo">🪵 Teak</div>
       <h2 class="setup-title">Initialize Candidate Profile</h2>
-      <p class="setup-subtitle">Let's seed your profile details. Paste your raw resume below to auto-parse details via
-        Hugging Face AI.</p>
+      <p class="setup-subtitle">Upload your resume or paste text below to auto-parse details via Hugging Face AI.</p>
     </div>
 
-    <!-- Paste Resume Section -->
-    <div class="setup-form-group">
+    <!-- Upload Mode Toggle -->
+    <div class="upload-mode-toggle">
+      <button class="mode-tab active" id="tab-upload" onclick="switchInputMode('upload')">📄 Upload File</button>
+      <button class="mode-tab" id="tab-paste" onclick="switchInputMode('paste')">✍️ Paste Text</button>
+    </div>
+
+    <!-- File Upload Zone -->
+    <div class="setup-form-group" id="upload-section">
+      <label>Upload Resume File</label>
+      <div class="file-drop-zone" id="file-drop-zone">
+        <div class="drop-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+        </div>
+        <div class="drop-title">Drop your resume here or click to browse</div>
+        <div class="drop-subtitle">Text will be auto-extracted for AI parsing</div>
+        <div class="drop-formats">
+          <span class="format-badge">.pdf</span>
+          <span class="format-badge">.docx</span>
+          <span class="format-badge">.txt</span>
+        </div>
+        <input type="file" id="resume-file-input" accept=".pdf,.docx,.txt,.doc">
+      </div>
+
+      <!-- File info bar (shown after selection) -->
+      <div class="file-info-bar" id="file-info-bar">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span class="file-name" id="selected-file-name">resume.pdf</span>
+        <span class="file-size" id="selected-file-size">128 KB</span>
+        <button class="btn-remove-file" id="btn-remove-file">Remove</button>
+      </div>
+
+      <!-- Extraction status -->
+      <div class="extraction-status" id="extraction-status">
+        <div class="spinner"></div>
+        <span id="extraction-status-text">Extracting text from file...</span>
+      </div>
+    </div>
+
+    <!-- Paste Text Section (hidden by default) -->
+    <div class="setup-form-group" id="paste-section" style="display: none;">
       <label for="raw-resume-input">Raw Resume / Profile text</label>
       <textarea id="raw-resume-input" class="setup-textarea"
         placeholder="Paste your raw resume text here..."></textarea>
+    </div>
+
+    <!-- Extracted text preview (shown after file extraction) -->
+    <div class="setup-form-group" id="preview-section" style="display: none;">
+      <label>Extracted Resume Text (Preview)</label>
+      <textarea id="extracted-text-preview" class="setup-textarea" style="min-height: 120px; opacity: 0.85;" readonly></textarea>
     </div>
 
     <button id="btn-parse-resume" class="btn-parse">
@@ -195,15 +422,178 @@
       window.location.href = '/index.html';
     }
 
+    // Configure pdf.js worker
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    let currentInputMode = 'upload'; // 'upload' or 'paste'
+    let extractedText = '';
+
     const btnParse = document.getElementById('btn-parse-resume');
     const btnSubmit = document.getElementById('btn-submit-profile');
     const rawResumeInput = document.getElementById('raw-resume-input');
     const parsedPanel = document.getElementById('parsed-results');
+    const fileInput = document.getElementById('resume-file-input');
+    const dropZone = document.getElementById('file-drop-zone');
+    const fileInfoBar = document.getElementById('file-info-bar');
+    const extractionStatus = document.getElementById('extraction-status');
+    const previewSection = document.getElementById('preview-section');
+    const extractedPreview = document.getElementById('extracted-text-preview');
 
+    // ── Mode Toggle ──
+    function switchInputMode(mode) {
+      currentInputMode = mode;
+      document.getElementById('tab-upload').classList.toggle('active', mode === 'upload');
+      document.getElementById('tab-paste').classList.toggle('active', mode === 'paste');
+      document.getElementById('upload-section').style.display = mode === 'upload' ? 'flex' : 'none';
+      document.getElementById('paste-section').style.display = mode === 'paste' ? 'flex' : 'none';
+
+      if (mode === 'paste') {
+        previewSection.style.display = 'none';
+      }
+    }
+
+    // ── Drag & Drop ──
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFileSelection(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelection(e.target.files[0]);
+      }
+    });
+
+    document.getElementById('btn-remove-file').addEventListener('click', () => {
+      fileInput.value = '';
+      fileInfoBar.style.display = 'none';
+      previewSection.style.display = 'none';
+      extractedText = '';
+      dropZone.style.display = 'block';
+    });
+
+    // ── File Processing ──
+    async function handleFileSelection(file) {
+      const validTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'text/plain'
+      ];
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      if (!validTypes.includes(file.type) && !['pdf', 'docx', 'doc', 'txt'].includes(ext)) {
+        alert('Please upload a PDF, DOCX, or TXT file.');
+        return;
+      }
+
+      // Show file info
+      document.getElementById('selected-file-name').textContent = file.name;
+      const sizeKB = (file.size / 1024).toFixed(1);
+      document.getElementById('selected-file-size').textContent = sizeKB > 1024
+        ? `${(sizeKB / 1024).toFixed(1)} MB`
+        : `${sizeKB} KB`;
+      fileInfoBar.style.display = 'flex';
+
+      // Show extraction status
+      extractionStatus.style.display = 'flex';
+      document.getElementById('extraction-status-text').textContent = 'Extracting text from file...';
+
+      try {
+        if (ext === 'txt') {
+          extractedText = await readTextFile(file);
+        } else if (ext === 'pdf') {
+          extractedText = await extractPDFText(file);
+        } else if (ext === 'docx' || ext === 'doc') {
+          extractedText = await extractDocxText(file);
+        }
+
+        if (!extractedText || extractedText.trim().length === 0) {
+          throw new Error('No text could be extracted from this file.');
+        }
+
+        document.getElementById('extraction-status-text').textContent =
+          `Extracted ${extractedText.trim().split(/\s+/).length} words successfully`;
+
+        // Show preview
+        extractedPreview.value = extractedText.trim();
+        previewSection.style.display = 'flex';
+        dropZone.style.display = 'none';
+
+        setTimeout(() => {
+          extractionStatus.style.display = 'none';
+        }, 2000);
+
+      } catch (err) {
+        document.getElementById('extraction-status-text').textContent = 'Extraction failed: ' + err.message;
+        extractedText = '';
+        setTimeout(() => {
+          extractionStatus.style.display = 'none';
+        }, 4000);
+      }
+    }
+
+    function readTextFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Failed to read text file'));
+        reader.readAsText(file);
+      });
+    }
+
+    async function extractPDFText(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+      }
+
+      return fullText;
+    }
+
+    async function extractDocxText(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value;
+    }
+
+    // ── Get active resume text ──
+    function getResumeText() {
+      if (currentInputMode === 'upload') {
+        return extractedText.trim();
+      } else {
+        return rawResumeInput.value.trim();
+      }
+    }
+
+    // ── Parse Resume ──
     btnParse.addEventListener('click', async () => {
-      const rawText = rawResumeInput.value.trim();
+      const rawText = getResumeText();
       if (!rawText) {
-        alert('Please paste your resume text first!');
+        alert(currentInputMode === 'upload'
+          ? 'Please upload a resume file first!'
+          : 'Please paste your resume text first!');
         return;
       }
 
@@ -254,7 +644,7 @@
       const fullName = document.getElementById('parsed-name').value.trim();
       const education = document.getElementById('parsed-education').value.trim();
       const skills = document.getElementById('parsed-skills').value.trim();
-      const rawText = rawResumeInput.value.trim();
+      const rawText = getResumeText();
 
       if (!fullName) {
         alert('Full name is required!');

@@ -144,7 +144,8 @@ def build_tailor_prompt(job: dict, base_resume: str, mode: str) -> str:
             f"- Address to the hiring manager\n"
             f"- Highlight relevant skills and projects\n"
             f"- Keep it concise (under 350 words)\n"
-            f"- Sound authentic, not generic"
+            f"- Sound authentic, not generic\n"
+            f"- IMPORTANT: Output PLAIN TEXT ONLY. Do NOT use any markdown formatting such as asterisks (*), hash symbols (#), bold (**), italic (_), or any other special formatting characters. Use only plain text with line breaks and dashes for lists."
         )
     else:
         return (
@@ -158,7 +159,7 @@ def build_tailor_prompt(job: dict, base_resume: str, mode: str) -> str:
             f"- Rewrite project descriptions to emphasize relevant skills\n"
             f"- Retain education details\n"
             f"- Add missing keywords naturally\n"
-            f"- Output in clean markdown format"
+            f"- IMPORTANT: Output PLAIN TEXT ONLY. Do NOT use any markdown formatting such as asterisks (*), hash symbols (#), bold (**), italic (_), or any other special formatting characters. Use only plain text with line breaks and dashes for lists."
         )
 
 
@@ -442,6 +443,27 @@ def update_profile(email):
         if not resp.ok:
             return jsonify({"error": f"Supabase error: {resp.text}"}), resp.status_code
         return jsonify({"success": True, "profile": payload})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/profile/<email>", methods=["DELETE"])
+def delete_profile(email):
+    """Delete user profile from Supabase."""
+    email = email.strip().lower()
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "Supabase credentials are not configured on the server."}), 500
+
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"
+    }
+    url = f"{SUPABASE_URL}/rest/v1/user_profiles?email=eq.{email}"
+    try:
+        resp = requests.delete(url, headers=headers, timeout=10)
+        if not resp.ok:
+            return jsonify({"error": f"Supabase error: {resp.text}"}), resp.status_code
+        return jsonify({"success": True, "message": "Profile deleted successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

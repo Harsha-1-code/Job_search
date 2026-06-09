@@ -278,9 +278,13 @@ const SEED_JOBS = [
 // Recruiter contacts for Outreach panel
 const RECRUITERS = [
   { id: 1, name: "Rohini Sen", role: "Lead Talent Scout", company: "Enterpret", email: "rohini@enterpret.com", linkedin: "linkedin.com/in/rohini-sen-enterpret" },
-  { id: 2, name: "David Miller", role: "Engineering Recruiter", company: "Figma", email: "david.m@figma.com", linkedin: "linkedin.com/in/david-figma-recruit" },
-  { id: 3, name: "Sarah Jenkins", role: "Director of Talent Acquisition", company: "Vercel", email: "jenkins@vercel.com", linkedin: "linkedin.com/in/sarahj-vercel" },
-  { id: 4, name: "Amit Sharma", role: "Talent Operations", company: "Cred", email: "amit.sharma@cred.club", linkedin: "linkedin.com/in/amit-cred-careers" }
+  { id: 2, name: "David Miller", role: "Engineering Recruiter", company: "Figma", email: "david.miller@figma.com", linkedin: "linkedin.com/in/david-figma-recruit" },
+  { id: 3, name: "Sarah Jenkins", role: "Director of Talent Acquisition", company: "Vercel", email: "sarah.jenkins@vercel.com", linkedin: "linkedin.com/in/sarahj-vercel" },
+  { id: 4, name: "Amit Sharma", role: "Talent Operations", company: "Cred", email: "amit.sharma@cred.club", linkedin: "linkedin.com/in/amit-cred-careers" },
+  { id: 5, name: "Priya Nair", role: "HR Business Partner", company: "Razorpay", email: "priya.nair@razorpay.com", linkedin: "linkedin.com/in/priya-nair-razorpay" },
+  { id: 6, name: "Michael Chen", role: "Technical Recruiter", company: "Stripe", email: "michael.chen@stripe.com", linkedin: "linkedin.com/in/michael-chen-stripe" },
+  { id: 7, name: "Ananya Desai", role: "University Recruiter", company: "Notion", email: "ananya@notion.so", linkedin: "linkedin.com/in/ananya-desai-notion" },
+  { id: 8, name: "James Cooper", role: "Senior Recruiter", company: "Coinbase", email: "james.cooper@coinbase.com", linkedin: "linkedin.com/in/james-cooper-coinbase" }
 ];
 
 // Mock inbound emails
@@ -314,7 +318,10 @@ SEED_JOBS.forEach((job, index) => {
 
 // Master lists for card deck tracking
 let MASTER_JOBS_DECK = [...SEED_JOBS];
-let passedJobIds = new Set(JSON.parse(localStorage.getItem('teak_passed_jobs')) || []);
+// Skipped jobs — stored as full job objects (last 30)
+let skippedJobs = JSON.parse(localStorage.getItem('teak_skipped_jobs')) || [];
+// Derive IDs set for quick filtering
+let passedJobIds = new Set(skippedJobs.map(j => j.id));
 
 let activeJobs = [...SEED_JOBS];
 let currentJobIndex = 0;
@@ -374,7 +381,9 @@ document.addEventListener("DOMContentLoaded", () => {
   renderKanban();
   renderOutreach();
   renderEmails();
+  renderSkippedJobs();
   setupEventListeners();
+  setupChatbot();
   updateSearchFilters();
   setupNavigation();
 });
@@ -510,6 +519,7 @@ function setupNavigation() {
     { btn: 'nav-applications', section: 'section-applications' },
     { btn: 'nav-outreach', section: 'section-outreach' },
     { btn: 'nav-emails', section: 'section-emails' },
+    { btn: 'nav-skipped', section: 'section-skipped' },
     { btn: 'nav-profile', section: 'section-profile' }
   ];
 
@@ -677,9 +687,13 @@ function performSwipe(direction) {
   if (direction === 'pass') {
     card.style.transform = "translateX(-200px) rotate(-15deg)";
     card.style.opacity = "0";
-    passedJobIds.add(currentJob.id);
-    localStorage.setItem('teak_passed_jobs', JSON.stringify([...passedJobIds]));
-    showNotification("Job passed 👎");
+    // Store full job object in skippedJobs (last 30)
+    const skippedEntry = { ...currentJob, skippedAt: new Date().toISOString() };
+    skippedJobs = [skippedEntry, ...skippedJobs.filter(j => j.id !== currentJob.id)].slice(0, 30);
+    passedJobIds = new Set(skippedJobs.map(j => j.id));
+    localStorage.setItem('teak_skipped_jobs', JSON.stringify(skippedJobs));
+    renderSkippedJobs();
+    showNotification("Job skipped 👎");
   } else if (direction === 'apply') {
     card.style.transform = "translateX(200px) rotate(15deg)";
     card.style.opacity = "0";
@@ -847,6 +861,7 @@ function updateOutreachPanel() {
   document.getElementById("contact-detail-role").innerText = rec.role;
   document.getElementById("contact-detail-company").innerText = rec.company;
   document.getElementById("contact-avatar").innerText = rec.name.split(' ').map(n => n.charAt(0)).join('');
+  document.getElementById("contact-detail-email").innerText = rec.email;
   document.getElementById("outreach-message-text").value = "";
 }
 
@@ -1179,7 +1194,7 @@ async function startResumeTailoring() {
 
     addConsoleLine(`✅ Generation complete via ${result.provider.toUpperCase()}!`, "system");
     document.getElementById("tab-original-content").innerText = baseResume;
-    document.getElementById("tab-optimized-content").innerText = result.text;
+    document.getElementById("tab-optimized-content").innerText = stripMarkdown(result.text);
     showNotification(`Tailoring succeeded via ${result.provider}! 🚀`);
   } catch (err) {
     addConsoleLine(`Backend error: ${err.message}`, "system");
@@ -1227,7 +1242,7 @@ EXPERIENCE & SELECTED PROJECTS:
         }
 
         document.getElementById("tab-original-content").innerText = baseResume;
-        document.getElementById("tab-optimized-content").innerText = output;
+        document.getElementById("tab-optimized-content").innerText = stripMarkdown(output);
         showNotification("Simulator tailoring completed successfully! ⚡");
       }, 600);
     }, 600);
@@ -1349,6 +1364,55 @@ function setupEventListeners() {
       showNotification(`Failed to save profile: ${err.message}`);
     }
   });
+
+  // Delete account trigger
+  const deleteBtn = document.getElementById("btn-delete-account");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", async () => {
+      const activeUser = JSON.parse(localStorage.getItem('teak_current_user'));
+      if (!activeUser || !activeUser.email) {
+        showNotification("No active session found.");
+        return;
+      }
+
+      const confirmed = confirm("Are you sure you want to permanently delete your account? This action cannot be undone and will delete all your data.");
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch(`${AI_SERVER_URL}/api/profile/${activeUser.email}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to delete database profile");
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          // Remove from local registered users list
+          let users = JSON.parse(localStorage.getItem('teak_users')) || [];
+          users = users.filter(u => u.email !== activeUser.email);
+          localStorage.setItem('teak_users', JSON.stringify(users));
+
+          // Clear local storage for this user session details
+          localStorage.removeItem('teak_current_user');
+          localStorage.removeItem('teak_base_resume');
+          localStorage.removeItem('teak_pipeline');
+          localStorage.removeItem('teak_skipped_jobs');
+          localStorage.removeItem('teak_gemini_key');
+
+          showNotification("Your account has been permanently deleted.");
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          throw new Error(data.error || "Unknown server response");
+        }
+      } catch (err) {
+        showNotification(`Account deletion failed: ${err.message}`);
+      }
+    });
+  }
 
   // API settings
   document.getElementById("btn-save-api-key").addEventListener("click", () => {
@@ -1499,3 +1563,326 @@ function generateSimulatorReply(mail, intent, txtArea) {
     showNotification("Simulator reply template loaded.");
   }, 400);
 }
+
+// ============================================================
+//  stripMarkdown — removes *, #, and other markdown formatting
+// ============================================================
+function stripMarkdown(text) {
+  if (!text) return '';
+  return text
+    // Remove headers (### Header)
+    .replace(/^#{1,6}\s*/gm, '')
+    // Remove bold/italic markers (**, *, __, _)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    // Remove strikethrough (~~text~~)
+    .replace(/~~([^~]+)~~/g, '$1')
+    // Remove inline code backticks
+    .replace(/`([^`]+)`/g, '$1')
+    // Remove code blocks
+    .replace(/```[\s\S]*?```/g, '')
+    // Remove horizontal rules
+    .replace(/^---+$/gm, '')
+    .replace(/^\*\*\*+$/gm, '')
+    // Remove standalone asterisks/hashes left over
+    .replace(/^\*\s/gm, '- ')
+    // Clean up extra blank lines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// ============================================================
+//  Skipped Jobs — Render & Restore
+// ============================================================
+function renderSkippedJobs() {
+  const container = document.getElementById('skipped-jobs-container');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (skippedJobs.length === 0) {
+    container.innerHTML = `
+      <div class="skipped-empty-state" style="grid-column: 1 / -1;">
+        <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h3>No skipped jobs yet</h3>
+        <p>Jobs you pass on from the deck will appear here. You can restore them back to the deck anytime.</p>
+      </div>
+    `;
+    return;
+  }
+
+  skippedJobs.forEach(job => {
+    const skippedDate = job.skippedAt
+      ? new Date(job.skippedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'Unknown';
+
+    const card = document.createElement('div');
+    card.className = 'skipped-job-card';
+    card.innerHTML = `
+      <div class="skipped-job-header">
+        <div class="skipped-job-info">
+          <div class="skipped-job-title">${escapeHTML(job.title)}</div>
+          <div class="skipped-job-company">${escapeHTML(job.company)} &bull; ${escapeHTML(job.location || 'Remote')}</div>
+        </div>
+      </div>
+      <div class="skipped-job-meta">
+        <span class="skipped-score">${escapeHTML(job.matchScore)}% Match</span>
+        <span>${escapeHTML(job.ats?.toUpperCase() || 'ATS')}</span>
+      </div>
+      <div class="skipped-job-footer">
+        <span class="skipped-date">Skipped: ${escapeHTML(skippedDate)}</span>
+        <button class="btn-restore" data-job-id="${job.id}">
+          ↩ Restore to Deck
+        </button>
+      </div>
+    `;
+
+    card.querySelector('.btn-restore').addEventListener('click', () => {
+      restoreSkippedJob(job.id);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function restoreSkippedJob(jobId) {
+  const jobIndex = skippedJobs.findIndex(j => j.id === jobId);
+  if (jobIndex === -1) return;
+
+  const [restoredJob] = skippedJobs.splice(jobIndex, 1);
+  delete restoredJob.skippedAt;
+
+  passedJobIds = new Set(skippedJobs.map(j => j.id));
+  localStorage.setItem('teak_skipped_jobs', JSON.stringify(skippedJobs));
+
+  // Re-filter active jobs so the restored job appears in the deck
+  updateSearchFilters();
+  renderSkippedJobs();
+
+  showNotification(`"${restoredJob.title}" restored to deck! 🔄`);
+}
+
+// ============================================================
+//  AI Assistant Chatbot
+// ============================================================
+const CHAT_FAQ = {
+  'how do i tailor my resume': 'To tailor your resume, go to the Jobs tab, find a job you like, and click "Tailor Resume" (or press Space). The AI Tailoring Suite panel will slide open where you can generate an optimized resume or cover letter for that specific job.',
+  'how to apply for a job': 'From the Jobs tab, swipe right or click "Apply" to save a job to your Applications pipeline. You can also click "Apply on Careers Page" to visit the company\'s careers site directly.',
+  'what is the outreach console': 'The Outreach Console lets you generate personalized LinkedIn DMs for recruiters at companies you\'re interested in. Select a recruiter, click "Generate via Gemini", and the AI will draft a custom message you can copy.',
+  'how to use filters': 'Click the "Filters" button in the top search bar to filter jobs by type (intern/fulltime), ATS platform (Greenhouse/Lever), match score, and location.',
+  'how to import jobs': 'Click the "Import Job (Bulk Scrape)" button at the top of the dashboard. This connects to the Supabase database and fetches fresh job listings.',
+  'what is the email section': 'The Emails section helps you manage post-application communications. You can view inbound emails and generate AI-drafted replies for interview scheduling, follow-ups, or thank-you notes.',
+  'how to save api key': 'Go to the "Profile & Keys" section in the sidebar. Enter your Gemini API key and click "Save Key". It\'s stored locally in your browser only.',
+  'how to track applications': 'The Applications tab shows a Kanban board with columns: Saved Deck, Applied, Interviewing, and Offers & Decisions. Drag and drop cards between columns to track your progress.',
+  'what is ats score': 'The ATS (Applicant Tracking System) Compatibility Index shows how well your resume matches a job\'s requirements. Higher scores mean better keyword alignment with the job posting.',
+  'how to skip a job': 'From the Jobs tab, swipe left or click "Pass" to skip a job. Skipped jobs are tracked in the "Skipped" section where you can restore them back to the deck if you change your mind.',
+  'how to view skipped jobs': 'Click on "Skipped" in the left sidebar to see your last 30 skipped jobs. You can restore any job back to the active deck.',
+  'how to upload resume': 'On the profile setup page, you can upload a PDF, DOCX, or TXT file. The text will be auto-extracted for AI parsing. You can also paste text manually using the toggle.',
+};
+
+function setupChatbot() {
+  const fab = document.getElementById('chat-fab');
+  const panel = document.getElementById('chat-panel');
+  const messagesContainer = document.getElementById('chat-messages');
+  const suggestionsContainer = document.getElementById('chat-suggestions');
+  const chatInput = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send-btn');
+
+  if (!fab || !panel) return;
+
+  let isChatOpen = false;
+  let chatMessages = [];
+
+  // Add welcome message
+  addBotMessage("Hey there! 👋 I'm the Teak AI Assistant. I can help you with:\n\n• How to tailor your resume\n• Navigating the app\n• Application tips\n• Understanding features\n\nWhat would you like to know?");
+
+  // Show suggestion chips
+  renderSuggestions([
+    'How do I tailor my resume?',
+    'How to apply for a job?',
+    'How to use filters?',
+    'What is the outreach console?'
+  ]);
+
+  // Toggle chat
+  fab.addEventListener('click', () => {
+    isChatOpen = !isChatOpen;
+    fab.classList.toggle('open', isChatOpen);
+    panel.classList.toggle('open', isChatOpen);
+
+    if (isChatOpen) {
+      setTimeout(() => chatInput.focus(), 300);
+    }
+  });
+
+  // Send message
+  sendBtn.addEventListener('click', () => sendMessage());
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+
+    addUserMessage(text);
+    chatInput.value = '';
+    suggestionsContainer.innerHTML = '';
+
+    handleBotResponse(text);
+  }
+
+  function addUserMessage(text) {
+    chatMessages.push({ role: 'user', text });
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble user';
+    bubble.textContent = text;
+    messagesContainer.appendChild(bubble);
+    scrollToBottom();
+  }
+
+  function addBotMessage(text) {
+    chatMessages.push({ role: 'bot', text });
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble bot';
+    bubble.textContent = text;
+    messagesContainer.appendChild(bubble);
+    scrollToBottom();
+  }
+
+  function showTypingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.className = 'chat-typing-indicator';
+    indicator.id = 'typing-indicator';
+    indicator.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+    messagesContainer.appendChild(indicator);
+    scrollToBottom();
+  }
+
+  function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) indicator.remove();
+  }
+
+  function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  function renderSuggestions(chips) {
+    suggestionsContainer.innerHTML = '';
+    chips.forEach(chip => {
+      const btn = document.createElement('button');
+      btn.className = 'chat-suggestion-chip';
+      btn.textContent = chip;
+      btn.addEventListener('click', () => {
+        chatInput.value = chip;
+        sendMessage();
+      });
+      suggestionsContainer.appendChild(btn);
+    });
+  }
+
+  async function handleBotResponse(userText) {
+    const lowerText = userText.toLowerCase().replace(/[?!.]/g, '').trim();
+
+    // Check FAQ first
+    let faqAnswer = null;
+    for (const [key, answer] of Object.entries(CHAT_FAQ)) {
+      if (lowerText.includes(key) || key.includes(lowerText) || levenshteinSimilar(lowerText, key)) {
+        faqAnswer = answer;
+        break;
+      }
+    }
+
+    if (faqAnswer) {
+      showTypingIndicator();
+      await delay(600 + Math.random() * 400);
+      removeTypingIndicator();
+      addBotMessage(faqAnswer);
+      renderContextualSuggestions(lowerText);
+      return;
+    }
+
+    // Try AI backend
+    showTypingIndicator();
+    try {
+      const systemPrompt = `You are Teak AI Assistant, a helpful chatbot for the Teak job search platform. Teak is an AI-powered job board that helps candidates find tech jobs, tailor resumes using LLMs, manage applications via a Kanban board, generate outreach messages for recruiters, and draft email replies. The app has these sections: Jobs (swipe deck), Applications (Kanban), Outreach (recruiter messaging), Emails (follow-up drafts), Skipped (last 30 passed jobs), and Profile & Keys (settings). Keep answers concise and helpful. If asked about something unrelated to job searching or the app, politely redirect.`;
+
+      const result = await callAIBackend('/api/generate', {
+        prompt: `${systemPrompt}\n\nUser question: ${userText}\n\nRespond helpfully and concisely.`
+      });
+
+      removeTypingIndicator();
+      addBotMessage(stripMarkdown(result.text));
+    } catch (err) {
+      removeTypingIndicator();
+      // Fuzzy fallback
+      addBotMessage("I can help with questions about using Teak! Try asking about how to tailor your resume, apply for jobs, use the outreach console, track applications, or manage your profile.");
+      renderSuggestions([
+        'How do I tailor my resume?',
+        'How to track applications?',
+        'How to view skipped jobs?',
+        'How to upload resume?'
+      ]);
+    }
+  }
+
+  function levenshteinSimilar(a, b) {
+    // Simple keyword overlap check
+    const wordsA = a.split(/\s+/);
+    const wordsB = b.split(/\s+/);
+    const overlap = wordsA.filter(w => wordsB.includes(w) && w.length > 2);
+    return overlap.length >= 2;
+  }
+
+  function renderContextualSuggestions(lastQuery) {
+    const suggestions = [];
+    if (!lastQuery.includes('tailor')) suggestions.push('How do I tailor my resume?');
+    if (!lastQuery.includes('apply')) suggestions.push('How to apply for a job?');
+    if (!lastQuery.includes('filter')) suggestions.push('How to use filters?');
+    if (!lastQuery.includes('skip')) suggestions.push('How to view skipped jobs?');
+    renderSuggestions(suggestions.slice(0, 3));
+  }
+
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// ============================================================
+//  Outreach Email Copy & Mailto handlers
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const copyEmailBtn = document.getElementById('btn-copy-recruiter-email');
+  const mailtoBtn = document.getElementById('btn-mailto-recruiter');
+
+  if (copyEmailBtn) {
+    copyEmailBtn.addEventListener('click', () => {
+      const rec = RECRUITERS.find(r => r.id === selectedContactId);
+      if (rec) {
+        navigator.clipboard.writeText(rec.email);
+        showNotification('Email address copied to clipboard!');
+      }
+    });
+  }
+
+  if (mailtoBtn) {
+    mailtoBtn.addEventListener('click', () => {
+      const rec = RECRUITERS.find(r => r.id === selectedContactId);
+      if (rec) {
+        const activeUser = JSON.parse(localStorage.getItem('teak_current_user')) || {};
+        const subject = encodeURIComponent(`Interest in Engineering Opportunities at ${rec.company}`);
+        const body = encodeURIComponent(`Hi ${rec.name.split(' ')[0]},\n\nI am ${activeUser.name || 'a candidate'} and I wanted to reach out regarding engineering opportunities at ${rec.company}.\n\nBest regards,\n${activeUser.name || 'Candidate'}`);
+        window.open(`mailto:${rec.email}?subject=${subject}&body=${body}`, '_self');
+      }
+    });
+  }
+});
+
