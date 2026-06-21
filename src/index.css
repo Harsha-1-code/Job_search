@@ -1497,14 +1497,20 @@ body::before {
    ============================================================ */
 
 .chatbot-container {
+  /* Use explicit 0×0 dimensions so this element never participates in
+     the body's flex layout — critical for Chromium-based browsers. */
   position: fixed;
   bottom: 0;
   right: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none; /* let children handle their own pointer-events */
   z-index: 5500;
 }
 
 .chat-fab {
-  position: fixed;
+  position: fixed !important;
   bottom: 28px;
   right: 28px;
   width: 56px;
@@ -1517,6 +1523,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35), 0 2px 8px rgba(0, 0, 0, 0.4);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1538,7 +1545,7 @@ body::before {
 }
 
 .chat-panel {
-  position: fixed;
+  position: fixed !important;
   bottom: 96px;
   right: 28px;
   width: 380px;
@@ -1554,13 +1561,15 @@ body::before {
   opacity: 0;
   transform: translateY(20px) scale(0.95);
   pointer-events: none;
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chat-panel.open {
   opacity: 1;
   transform: translateY(0) scale(1);
   pointer-events: auto;
+  visibility: visible;
 }
 
 .chat-panel-header {
@@ -1650,6 +1659,7 @@ body::before {
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   border-bottom-left-radius: 4px;
+  white-space: pre-line; /* preserve \n line breaks from JS */
 }
 
 .chat-bubble.user {
