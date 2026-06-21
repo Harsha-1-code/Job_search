@@ -821,6 +821,48 @@ body::before {
   align-items: center;
 }
 
+/* Kanban card header row with title + delete button */
+.kanban-card-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.kanban-card-header-row .kanban-card-title {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.kanban-delete-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  padding: 0;
+}
+
+.kanban-card:hover .kanban-delete-btn {
+  opacity: 1;
+}
+
+.kanban-delete-btn:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: var(--color-red);
+}
+
 /* Outreach / Contacts Panel */
 .outreach-container {
   display: grid;

@@ -204,7 +204,7 @@
                   <!-- Match Score Display -->
                   <div class="action-icons">
                     <a id="careers-link-btn" class="btn-utility"
-                      style="padding: 4px 8px; font-size: 11px; text-decoration: none;" target="_blank" href="#">
+                      style="padding: 4px 8px; font-size: 11px; text-decoration: none;" target="_blank" rel="noopener noreferrer" href="#">
                       Apply on Careers Page ↗
                     </a>
                     <div class="match-score">
@@ -744,6 +744,8 @@
   </div>
 
   <script src="src/index.js"></script>
+  <!-- Chatbot module loaded separately for Chromium compatibility -->
+  <script src="src/chatbot.js" defer></script>
 </body>
 
 </html>

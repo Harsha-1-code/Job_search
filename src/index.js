@@ -383,7 +383,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderEmails();
   renderSkippedJobs();
   setupEventListeners();
-  setupChatbot();
+  // Note: chatbot is initialised by src/chatbot.js (loaded separately for Chromium compatibility)
   updateSearchFilters();
   setupNavigation();
 });
@@ -660,7 +660,17 @@ function renderJobCard() {
   document.getElementById("company-name-display").innerText = job.company;
   document.getElementById("ats-badge").innerText = job.ats;
   document.getElementById("match-score-display").innerText = `${job.matchScore}%`;
-  document.getElementById("careers-link-btn").href = job.careersUrl || job.url;
+
+  // Use direct Greenhouse/Lever apply URL first, fall back to company careers page
+  const applyUrl = job.url || job.careersUrl || '#';
+  const careersLinkBtn = document.getElementById("careers-link-btn");
+  careersLinkBtn.href = applyUrl;
+  careersLinkBtn.title = job.ats === 'greenhouse'
+    ? `Apply on Greenhouse for ${job.company}`
+    : job.ats === 'lever'
+      ? `Apply on Lever for ${job.company}`
+      : `Apply at ${job.company}`;
+  careersLinkBtn.textContent = `Apply on ${job.ats === 'greenhouse' ? 'Greenhouse' : job.ats === 'lever' ? 'Lever' : 'Careers'} ↗`;
 
   // Render location safely
   const locEl = document.getElementById("job-location-display");
@@ -830,10 +840,17 @@ function renderKanban() {
       card.dataset.lane = lane;
 
       card.innerHTML = `
-        <div class="kanban-card-title">${escapeHTML(job.title)}</div>
+        <div class="kanban-card-header-row">
+          <div class="kanban-card-title">${escapeHTML(job.title)}</div>
+          <button class="kanban-delete-btn" title="Remove from pipeline" aria-label="Remove ${escapeHTML(job.title)} from pipeline">
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
         <div class="kanban-card-company">${escapeHTML(job.company)} • <span style="font-size: 11px; text-transform: uppercase;">${escapeHTML(job.ats)}</span></div>
         <div style="margin-top: 4px; margin-bottom: 8px;">
-          <a href="${escapeHTML(job.careersUrl || job.url)}" target="_blank" style="font-size: 11.5px; color: var(--color-accent); text-decoration: none; font-weight: 500;">Apply on Careers Page ↗</a>
+          <a href="${escapeHTML(job.url || job.careersUrl || '#')}" target="_blank" rel="noopener noreferrer" style="font-size: 11.5px; color: var(--color-accent); text-decoration: none; font-weight: 500;">Apply on ${job.ats === 'greenhouse' ? 'Greenhouse' : job.ats === 'lever' ? 'Lever' : 'Careers'} ↗</a>
         </div>
         <div class="kanban-card-footer">
           <span style="font-size: 11px; color: var(--color-orange); font-weight:600;">${escapeHTML(job.matchScore)}% Match</span>
@@ -843,6 +860,11 @@ function renderKanban() {
 
       card.querySelector('.tailor-btn').addEventListener('click', () => {
         triggerDirectAITailor(job.id);
+      });
+
+      card.querySelector('.kanban-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation(); // prevent drag accidentally triggering
+        removeFromPipeline(job.id, lane, card);
       });
 
       // Drag/Drop hooks
@@ -885,6 +907,35 @@ function renderKanban() {
       }
     });
   });
+}
+
+// Remove a job from the pipeline and restore it to the active deck
+function removeFromPipeline(jobId, lane, cardEl) {
+  const jobIdx = pipeline[lane].findIndex(j => j.id == jobId);
+  if (jobIdx === -1) return;
+
+  const [removedJob] = pipeline[lane].splice(jobIdx, 1);
+  savePipeline();
+
+  // Animate card out, then re-render
+  if (cardEl) {
+    cardEl.style.transition = 'opacity 0.25s ease, transform 0.25s ease, max-height 0.3s ease, margin 0.3s ease';
+    cardEl.style.opacity = '0';
+    cardEl.style.transform = 'scale(0.9)';
+    cardEl.style.maxHeight = '0';
+    cardEl.style.overflow = 'hidden';
+    cardEl.style.marginBottom = '0';
+    setTimeout(() => {
+      renderKanban();
+      // Also refresh the job deck so the card re-appears
+      updateSearchFilters();
+    }, 300);
+  } else {
+    renderKanban();
+    updateSearchFilters();
+  }
+
+  showNotification(`"${removedJob.title}" removed from ${lane.toUpperCase()} 🗑️`);
 }
 
 // Trigger AI Panel from Kanban item directly
@@ -1758,201 +1809,18 @@ function restoreSkippedJob(jobId) {
 }
 
 // ============================================================
-//  AI Assistant Chatbot
+//  AI Assistant Chatbot — Moved to src/chatbot.js
+//  The chatbot is now a standalone IIFE module for Chromium compatibility.
+//  setupChatbot() is kept as a no-op stub to avoid reference errors.
 // ============================================================
-const CHAT_FAQ = {
-  'how do i tailor my resume': 'To tailor your resume, go to the Jobs tab, find a job you like, and click "Tailor Resume" (or press Space). The AI Tailoring Suite panel will slide open where you can generate an optimized resume or cover letter for that specific job.',
-  'how to apply for a job': 'From the Jobs tab, swipe right or click "Apply" to save a job to your Applications pipeline. You can also click "Apply on Careers Page" to visit the company\'s careers site directly.',
-  'what is the outreach console': 'The Outreach Console lets you generate personalized LinkedIn DMs for recruiters at companies you\'re interested in. Select a recruiter, click "Generate via Gemini", and the AI will draft a custom message you can copy.',
-  'how to use filters': 'Click the "Filters" button in the top search bar to filter jobs by type (intern/fulltime), ATS platform (Greenhouse/Lever), match score, and location.',
-  'how to import jobs': 'Click the "Import Job (Bulk Scrape)" button at the top of the dashboard. This connects to the Supabase database and fetches fresh job listings.',
-  'what is the email section': 'The Emails section helps you manage post-application communications. You can view inbound emails and generate AI-drafted replies for interview scheduling, follow-ups, or thank-you notes.',
-  'how to save api key': 'Go to the "Profile & Keys" section in the sidebar. Enter your Gemini API key and click "Save Key". It\'s stored locally in your browser only.',
-  'how to track applications': 'The Applications tab shows a Kanban board with columns: Saved Deck, Applied, Interviewing, and Offers & Decisions. Drag and drop cards between columns to track your progress.',
-  'what is ats score': 'The ATS (Applicant Tracking System) Compatibility Index shows how well your resume matches a job\'s requirements. Higher scores mean better keyword alignment with the job posting.',
-  'how to skip a job': 'From the Jobs tab, swipe left or click "Pass" to skip a job. Skipped jobs are tracked in the "Skipped" section where you can restore them back to the deck if you change your mind.',
-  'how to view skipped jobs': 'Click on "Skipped" in the left sidebar to see your last 30 skipped jobs. You can restore any job back to the active deck.',
-  'how to upload resume': 'On the profile setup page, you can upload a PDF, DOCX, or TXT file. The text will be auto-extracted for AI parsing. You can also paste text manually using the toggle.',
-};
 
+// eslint-disable-next-line no-unused-vars
 function setupChatbot() {
-  const fab = document.getElementById('chat-fab');
-  const panel = document.getElementById('chat-panel');
-  const messagesContainer = document.getElementById('chat-messages');
-  const suggestionsContainer = document.getElementById('chat-suggestions');
-  const chatInput = document.getElementById('chat-input');
-  const sendBtn = document.getElementById('chat-send-btn');
-
-  if (!fab || !panel) return;
-
-  let isChatOpen = false;
-  let chatMessages = [];
-
-  // Add welcome message
-  addBotMessage("Hey there! 👋 I'm the Teak AI Assistant. I can help you with:\n\n• How to tailor your resume\n• Navigating the app\n• Application tips\n• Understanding features\n\nWhat would you like to know?");
-
-  // Show suggestion chips
-  renderSuggestions([
-    'How do I tailor my resume?',
-    'How to apply for a job?',
-    'How to use filters?',
-    'What is the outreach console?'
-  ]);
-
-  // Toggle chat
-  fab.addEventListener('click', () => {
-    isChatOpen = !isChatOpen;
-    fab.classList.toggle('open', isChatOpen);
-    panel.classList.toggle('open', isChatOpen);
-
-    if (isChatOpen) {
-      setTimeout(() => chatInput.focus(), 300);
-    }
-  });
-
-  // Send message
-  sendBtn.addEventListener('click', () => sendMessage());
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  function sendMessage() {
-    const text = chatInput.value.trim();
-    if (!text) return;
-
-    addUserMessage(text);
-    chatInput.value = '';
-    suggestionsContainer.innerHTML = '';
-
-    handleBotResponse(text);
-  }
-
-  function addUserMessage(text) {
-    chatMessages.push({ role: 'user', text });
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble user';
-    bubble.textContent = text;
-    messagesContainer.appendChild(bubble);
-    scrollToBottom();
-  }
-
-  function addBotMessage(text) {
-    chatMessages.push({ role: 'bot', text });
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble bot';
-    bubble.textContent = text;
-    messagesContainer.appendChild(bubble);
-    scrollToBottom();
-  }
-
-  function showTypingIndicator() {
-    const indicator = document.createElement('div');
-    indicator.className = 'chat-typing-indicator';
-    indicator.id = 'typing-indicator';
-    indicator.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-    messagesContainer.appendChild(indicator);
-    scrollToBottom();
-  }
-
-  function removeTypingIndicator() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) indicator.remove();
-  }
-
-  function scrollToBottom() {
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }
-
-  function renderSuggestions(chips) {
-    suggestionsContainer.innerHTML = '';
-    chips.forEach(chip => {
-      const btn = document.createElement('button');
-      btn.className = 'chat-suggestion-chip';
-      btn.textContent = chip;
-      btn.addEventListener('click', () => {
-        chatInput.value = chip;
-        sendMessage();
-      });
-      suggestionsContainer.appendChild(btn);
-    });
-  }
-
-  async function handleBotResponse(userText) {
-    const lowerText = userText.toLowerCase().replace(/[?!.]/g, '').trim();
-
-    // Check FAQ first
-    let faqAnswer = null;
-    for (const [key, answer] of Object.entries(CHAT_FAQ)) {
-      if (lowerText.includes(key) || key.includes(lowerText) || levenshteinSimilar(lowerText, key)) {
-        faqAnswer = answer;
-        break;
-      }
-    }
-
-    if (faqAnswer) {
-      showTypingIndicator();
-      await delay(600 + Math.random() * 400);
-      removeTypingIndicator();
-      addBotMessage(faqAnswer);
-      renderContextualSuggestions(lowerText);
-      return;
-    }
-
-    // Try AI backend
-    showTypingIndicator();
-    try {
-      const systemPrompt = `You are Teak AI Assistant, a helpful chatbot for the Teak job search platform. Teak is an AI-powered job board that helps candidates find tech jobs, tailor resumes using LLMs, manage applications via a Kanban board, generate outreach messages for recruiters, and draft email replies. The app has these sections: Jobs (swipe deck), Applications (Kanban), Outreach (recruiter messaging), Emails (follow-up drafts), Skipped (last 30 passed jobs), and Profile & Keys (settings). Keep answers concise and helpful. If asked about something unrelated to job searching or the app, politely redirect.`;
-
-      // Map chat messages to the format expected by the backend
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...chatMessages.map(msg => ({
-          role: msg.role === 'bot' ? 'assistant' : msg.role,
-          content: msg.text
-        }))
-      ];
-
-      const result = await callAIBackend('/api/chat', { messages });
-
-      removeTypingIndicator();
-      addBotMessage(stripMarkdown(result.text));
-    } catch (err) {
-      removeTypingIndicator();
-      // Fuzzy fallback
-      addBotMessage("I can help with questions about using Teak! Try asking about how to tailor your resume, apply for jobs, use the outreach console, track applications, or manage your profile.");
-      renderSuggestions([
-        'How do I tailor my resume?',
-        'How to track applications?',
-        'How to view skipped jobs?',
-        'How to upload resume?'
-      ]);
-    }
-  }
-
-  function levenshteinSimilar(a, b) {
-    // Simple keyword overlap check
-    const wordsA = a.split(/\s+/);
-    const wordsB = b.split(/\s+/);
-    const overlap = wordsA.filter(w => wordsB.includes(w) && w.length > 2);
-    return overlap.length >= 2;
-  }
-
-  function renderContextualSuggestions(lastQuery) {
-    const suggestions = [];
-    if (!lastQuery.includes('tailor')) suggestions.push('How do I tailor my resume?');
-    if (!lastQuery.includes('apply')) suggestions.push('How to apply for a job?');
-    if (!lastQuery.includes('filter')) suggestions.push('How to use filters?');
-    if (!lastQuery.includes('skip')) suggestions.push('How to view skipped jobs?');
-    renderSuggestions(suggestions.slice(0, 3));
-  }
-
-  function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+  // Intentional no-op: chatbot initialisation is handled by src/chatbot.js
+  // which is loaded as a separate <script defer> tag in index.html.
 }
+
+
 
 // ============================================================
 //  Outreach Email Copy & Mailto handlers
