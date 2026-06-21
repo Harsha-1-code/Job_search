@@ -940,12 +940,19 @@ function removeFromPipeline(jobId, lane, cardEl) {
 
 // Trigger AI Panel from Kanban item directly
 window.triggerDirectAITailor = function (jobId) {
-  const allJobs = [...SEED_JOBS, ...(activeJobs || [])];
+  // Search everywhere: active deck, all pipeline lanes, seed jobs
+  const allJobs = [
+    ...SEED_JOBS,
+    ...(activeJobs || []),
+    ...(pipeline.saved || []),
+    ...(pipeline.applied || []),
+    ...(pipeline.interviewing || []),
+    ...(pipeline.offer || [])
+  ];
   const found = allJobs.find(j => j.id == jobId);
   if (found) {
-    const mockIndex = activeJobs.findIndex(j => j.id == jobId);
-    if (mockIndex > -1) currentJobIndex = mockIndex;
-    openAIPanel();
+    // Pass the job directly — it may not be in activeJobs anymore
+    openAIPanel(found);
   }
 };
 
@@ -1177,11 +1184,12 @@ async function runManualScraper() {
 }
 
 // AI Panel control matrix
-function openAIPanel() {
+// @param {object} [targetJob] — optional job to tailor for; if omitted, uses current deck card
+function openAIPanel(targetJob) {
   const panel = document.getElementById("ai-panel");
   panel.classList.add("open");
 
-  const job = activeJobs[currentJobIndex] || SEED_JOBS[0];
+  const job = targetJob || activeJobs[currentJobIndex] || SEED_JOBS[0];
   document.getElementById("target-job-label").innerText = `${job.title} at ${job.company}`;
   document.getElementById("base-resume-input").value = BASE_RESUME;
 
