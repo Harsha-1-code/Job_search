@@ -6,7 +6,10 @@ The frontend calls these endpoints instead of making direct API calls from the b
 
 import os
 import json
+import re
 import requests
+from html import unescape
+from datetime import datetime, timedelta, timezone
 # pyrefly: ignore [missing-import]
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -420,6 +423,233 @@ def get_jobs():
         return jsonify(resp.json())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ===================================================================
+#  Real Job Scraping — Greenhouse & Lever public APIs
+# ===================================================================
+
+def classify_experience_level(title: str) -> str:
+    """Classify experience level from job title keywords."""
+    t = title.lower()
+    if re.search(r'\b(manager|director|vp|vice president|head of|chief|cto|cfo|coo|cxo)\b', t):
+        return 'manager'
+    if re.search(r'\b(senior|sr\.?|staff|principal|lead|architect|distinguished)\b', t):
+        return 'senior'
+    if re.search(r'\b(intern|junior|jr\.?|graduate|entry|trainee|associate|new grad|fresher|apprentice)\b', t):
+        return 'fresher'
+    return 'mid'
+
+
+def parse_greenhouse_content(html_content: str) -> tuple[list, list]:
+    """
+    Parse Greenhouse HTML job description into qualifications and desired lists.
+    Looks for section headers (h2/h3/h4/strong) to identify required vs. nice-to-have sections,
+    then extracts <li> items from each.
+    """
+    if not html_content:
+        return [], []
+
+    html_content = unescape(html_content)
+
+    required_keywords = ['require', 'qualif', 'must', 'need', 'looking for',
+                         'what you', 'responsib', 'who you are', 'about you',
+                         'minimum', 'basic', 'what we expect', 'skills']
+    desired_keywords = ['nice to have', 'prefer', 'bonus', 'plus', 'ideal',
+                        'additional', 'desired', 'great to have', 'assets']
+
+    qualifications: list[str] = []
+    desired: list[str] = []
+
+    # Split by section headers
+    parts = re.split(
+        r'<(?:h[2-4]|strong)[^>]*>(.*?)</(?:h[2-4]|strong)>',
+        html_content, flags=re.DOTALL | re.IGNORECASE
+    )
+
+    if len(parts) > 2:
+        # Walk header/content pairs
+        idx = 1
+        while idx < len(parts) - 1:
+            header_text = re.sub(r'<[^>]+>', '', parts[idx]).strip().lower()
+            body_html = parts[idx + 1] if idx + 1 < len(parts) else ''
+            idx += 2
+
+            items = re.findall(r'<li[^>]*>(.*?)</li>', body_html,
+                               re.DOTALL | re.IGNORECASE)
+            clean = [re.sub(r'<[^>]+>', '', it).strip() for it in items]
+            clean = [it for it in clean if len(it) > 10]
+
+            if any(kw in header_text for kw in desired_keywords):
+                desired.extend(clean[:4])
+            elif any(kw in header_text for kw in required_keywords):
+                qualifications.extend(clean[:5])
+            elif not qualifications:
+                qualifications.extend(clean[:5])
+            elif not desired:
+                desired.extend(clean[:4])
+
+    # Fallback — just extract all <li> and split in half
+    if not qualifications:
+        all_items = re.findall(r'<li[^>]*>(.*?)</li>', html_content,
+                               re.DOTALL | re.IGNORECASE)
+        clean = [re.sub(r'<[^>]+>', '', it).strip() for it in all_items]
+        clean = [it for it in clean if len(it) > 10]
+        if clean:
+            mid = max(len(clean) // 2, 1)
+            qualifications = clean[:mid][:5]
+            desired = clean[mid:][:4]
+
+    # Last-resort — extract paragraphs
+    if not qualifications:
+        paras = re.findall(r'<p[^>]*>(.*?)</p>', html_content, re.DOTALL)
+        clean_p = [re.sub(r'<[^>]+>', '', p).strip()
+                   for p in paras if len(re.sub(r'<[^>]+>', '', p).strip()) > 25]
+        qualifications = clean_p[:3] or ['See full description on company career portal']
+        desired = clean_p[3:6] or ['Visit career portal for complete requirements']
+
+    return qualifications[:5], desired[:4]
+
+
+def parse_lever_lists(lists_data: list) -> tuple[list, list]:
+    """Parse Lever structured 'lists' array into qualifications and desired."""
+    required_keywords = ['require', 'qualif', 'must', 'need', 'looking for',
+                         'responsib', 'who you are', 'about you', 'skills']
+    desired_keywords = ['nice', 'prefer', 'bonus', 'plus', 'ideal',
+                        'additional', 'desired']
+
+    qualifications: list[str] = []
+    desired: list[str] = []
+
+    for lst in (lists_data or []):
+        header = lst.get('text', '').lower()
+        content = lst.get('content', '')
+
+        items = re.findall(r'<li[^>]*>(.*?)</li>', content,
+                           re.DOTALL | re.IGNORECASE)
+        clean = [re.sub(r'<[^>]+>', '', it).strip() for it in items]
+        clean = [it for it in clean if len(it) > 10]
+
+        if any(kw in header for kw in desired_keywords):
+            desired.extend(clean[:4])
+        elif any(kw in header for kw in required_keywords):
+            qualifications.extend(clean[:5])
+        elif not qualifications:
+            qualifications.extend(clean[:5])
+        elif not desired:
+            desired.extend(clean[:4])
+
+    return qualifications[:5], desired[:4]
+
+
+@app.route("/api/scrape-company", methods=["POST"])
+def scrape_company():
+    """
+    Fetch real job listings from Greenhouse / Lever public APIs,
+    parse HTML descriptions, and return structured job objects.
+    Filters: location contains India / Bengaluru / Bangalore / Remote,
+    posted within 30 days.
+    """
+    data = request.get_json(force=True)
+    slug = data.get("slug", "")
+    ats = data.get("ats", "greenhouse")
+    careers_url = data.get("careersUrl", "")
+    company_name = data.get("name", slug.title())
+
+    if not slug:
+        return jsonify({"error": "Missing company slug"}), 400
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    location_keywords = ['bengaluru', 'bangalore', 'india', 'remote']
+    jobs: list[dict] = []
+
+    try:
+        if ats == 'greenhouse':
+            api_url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+            resp = requests.get(api_url, timeout=15)
+            if not resp.ok:
+                return jsonify({"success": True, "jobs": [],
+                                "message": f"Greenhouse returned {resp.status_code}"})
+
+            for jd in resp.json().get('jobs', []):
+                location = jd.get('location', {}).get('name', '')
+                if not any(kw in location.lower() for kw in location_keywords):
+                    continue
+
+                updated = jd.get('updated_at', '')
+                try:
+                    job_date = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                    if job_date < cutoff:
+                        continue
+                except Exception:
+                    pass  # keep the job if date can't be parsed
+
+                content = jd.get('content', '')
+                quals, des = parse_greenhouse_content(content)
+                title = jd.get('title', '')
+
+                jobs.append({
+                    'id': jd.get('id'),
+                    'title': title,
+                    'company': company_name,
+                    'location': location,
+                    'ats': 'greenhouse',
+                    'url': jd.get('absolute_url', ''),
+                    'careersUrl': careers_url,
+                    'posted_at': updated,
+                    'qualifications': quals,
+                    'desired': des,
+                    'experienceLevel': classify_experience_level(title),
+                })
+
+        elif ats == 'lever':
+            api_url = f"https://api.lever.co/v0/postings/{slug}?mode=json"
+            resp = requests.get(api_url, timeout=15)
+            if not resp.ok:
+                return jsonify({"success": True, "jobs": [],
+                                "message": f"Lever returned {resp.status_code}"})
+
+            for posting in resp.json():
+                location = posting.get('categories', {}).get('location', '')
+                if not any(kw in location.lower() for kw in location_keywords):
+                    continue
+
+                created_ms = posting.get('createdAt', 0)
+                try:
+                    job_date = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc)
+                    if job_date < cutoff:
+                        continue
+                except Exception:
+                    pass
+
+                quals, des = parse_lever_lists(posting.get('lists', []))
+                title = posting.get('text', '')
+
+                jobs.append({
+                    'id': posting.get('id', ''),
+                    'title': title,
+                    'company': company_name,
+                    'location': location,
+                    'ats': 'lever',
+                    'url': posting.get('hostedUrl', ''),
+                    'careersUrl': careers_url,
+                    'posted_at': datetime.fromtimestamp(
+                        created_ms / 1000, tz=timezone.utc
+                    ).isoformat() if created_ms else '',
+                    'qualifications': quals,
+                    'desired': des,
+                    'experienceLevel': classify_experience_level(title),
+                })
+
+        else:
+            return jsonify({"error": f"Unknown ATS type: {ats}"}), 400
+
+        return jsonify({"success": True, "jobs": jobs, "count": len(jobs)})
+
+    except requests.Timeout:
+        return jsonify({"success": True, "jobs": [], "message": "API request timed out"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "jobs": []}), 500
 
 
 @app.route("/api/profile", methods=["POST"])

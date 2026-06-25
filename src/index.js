@@ -1100,7 +1100,7 @@ function updateSearchFilters() {
   document.getElementById("filter-badge-count").innerText = count;
 }
 
-// Scraper simulation grid loader
+// Scraper — fetches real job listings from Greenhouse & Lever APIs via backend
 async function runManualScraper() {
   const overlay = document.getElementById("scraper-log-overlay");
   const logBody = document.getElementById("scraper-log-body");
@@ -1117,7 +1117,7 @@ async function runManualScraper() {
   };
 
   addLine("Initializing Bulk Scraper Core...", "system");
-  addLine("Scanning 40 companies from seed database (30-day window)...", "info");
+  addLine("Fetching real job listings from Greenhouse & Lever public APIs...", "info");
 
   const targetCompanies = [
     { name: "Canva", ats: "greenhouse", slug: "canva", careersUrl: "https://www.canva.com/careers" },
@@ -1129,75 +1129,125 @@ async function runManualScraper() {
     { name: "GitLab", ats: "greenhouse", slug: "gitlab", careersUrl: "https://about.gitlab.com/jobs" },
     { name: "Rippling", ats: "greenhouse", slug: "rippling", careersUrl: "https://www.rippling.com/careers" },
     { name: "Datadog", ats: "greenhouse", slug: "datadoghq", careersUrl: "https://careers.datadoghq.com" },
-    { name: "Rubrik", ats: "greenhouse", slug: "rubrik", careersUrl: "https://www.rubrik.com/company/careers" }
+    { name: "Rubrik", ats: "greenhouse", slug: "rubrik", careersUrl: "https://www.rubrik.com/company/careers" },
+    { name: "Cred", ats: "lever", slug: "cred", careersUrl: "https://careers.cred.club" },
+    { name: "Swiggy", ats: "lever", slug: "swiggy", careersUrl: "https://careers.swiggy.com" },
+    { name: "Meesho", ats: "lever", slug: "meesho", careersUrl: "https://meesho.io/careers" },
+    { name: "Dream11", ats: "lever", slug: "dream11", careersUrl: "https://www.dreamsports.group/careers" }
   ];
 
-  let i = 0;
-  const interval = setInterval(async () => {
-    if (i < targetCompanies.length) {
-      const c = targetCompanies[i];
-      addLine(`Accessing ${c.name} endpoints via ${c.ats.toUpperCase()} parser...`, "info");
-      const found = Math.floor(Math.random() * 3) + 1;
-      addLine(`-> Found ${found} tech roles posted within 30 days.`, "system");
-      i++;
-    } else {
-      clearInterval(interval);
-      addLine("========================================", "system");
-      addLine("Connecting to Supabase database API...", "info");
+  const allScrapedJobs = [];
 
-      try {
-        const response = await fetch(`${AI_SERVER_URL}/api/jobs`);
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status} ${response.statusText}`);
-        }
-        const dbJobs = await response.json();
-        addLine(`-> Successfully retrieved ${dbJobs.length} jobs from Supabase!`, "system");
+  // Scrape each company sequentially via the backend
+  for (const company of targetCompanies) {
+    addLine(`Scraping ${company.name} via ${company.ats.toUpperCase()} API...`, "info");
+    try {
+      const response = await fetch(`${AI_SERVER_URL}/api/scrape-company`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(company)
+      });
+      const data = await response.json();
+      if (data.success && data.jobs && data.jobs.length > 0) {
+        addLine(`→ Found ${data.jobs.length} matching roles at ${company.name}`, "system");
+        allScrapedJobs.push(...data.jobs);
+      } else {
+        const msg = data.message || 'No India/Remote roles within 30 days';
+        addLine(`→ ${company.name}: ${msg}`, "info");
+      }
+    } catch (err) {
+      addLine(`→ Error scraping ${company.name}: ${err.message}`, "error");
+    }
+  }
 
-        // Map and normalize DB fields to client expectations
-        const newJobs = dbJobs.map(job => {
-          const isIntern = job.title.toLowerCase().includes('intern');
-          return {
-            id: job.id,
-            title: job.title,
-            company: job.company,
-            location: job.location,
-            ats: job.ats,
-            matchScore: job.matchScore || Math.floor(Math.random() * 15) + 83,
-            type: job.type || (isIntern ? 'intern' : 'fulltime'),
-            experienceLevel: job.experienceLevel || classifyExperienceLevel(job.title),
-            qualifications: job.qualifications || [
-              "Solid understanding of software development patterns",
-              "Experience writing clean, maintainable code",
-              "Ability to work collaboratively in a fast-paced environment"
-            ],
-            desired: job.desired || [
-              "Familiarity with cloud platforms (AWS, GCP, or Azure)",
-              "Interest or experience in the company's domain",
-              "Good communication and team-player mindset"
-            ],
-            url: job.url,
-            careersUrl: job.careersUrl || null,
-            posted_at: job.posted_at
-          };
-        });
+  addLine("========================================", "system");
+  addLine(`Live scraping complete! Found ${allScrapedJobs.length} jobs with unique descriptions.`, "system");
 
-        MASTER_JOBS_DECK = [...SEED_JOBS, ...newJobs];
-        updateSearchFilters();
-
-        setTimeout(() => {
-          overlay.style.display = "none";
-          showNotification(`Refreshed! Deck now has ${activeJobs.length} jobs from Supabase.`);
-        }, 1200);
-
-      } catch (err) {
-        addLine(`Error fetching jobs: ${err.message}`, "error");
-        setTimeout(() => {
-          overlay.style.display = "none";
-          showNotification(`Failed to load jobs from database: ${err.message}`);
-        }, 2000);
+  // Also try to load stored jobs from Supabase as supplement
+  let supabaseJobs = [];
+  try {
+    addLine("Checking Supabase database for additional stored jobs...", "info");
+    const response = await fetch(`${AI_SERVER_URL}/api/jobs`);
+    if (response.ok) {
+      const dbJobs = await response.json();
+      if (dbJobs.length > 0) {
+        addLine(`→ Retrieved ${dbJobs.length} additional jobs from Supabase.`, "system");
+        supabaseJobs = dbJobs;
       }
     }
-  }, 200);
+  } catch (err) {
+    addLine(`→ Supabase unavailable: ${err.message}`, "info");
+  }
+
+  // Normalize live-scraped jobs
+  const liveJobs = allScrapedJobs.map(job => ({
+    id: job.id || `live-${Math.floor(Math.random() * 100000)}`,
+    title: job.title,
+    company: job.company,
+    location: job.location,
+    ats: job.ats,
+    matchScore: Math.floor(Math.random() * 15) + 83,
+    type: job.title.toLowerCase().includes('intern') ? 'intern' : 'fulltime',
+    experienceLevel: job.experienceLevel || classifyExperienceLevel(job.title),
+    qualifications: job.qualifications && job.qualifications.length > 0
+      ? job.qualifications
+      : ["See full job description on company career portal"],
+    desired: job.desired && job.desired.length > 0
+      ? job.desired
+      : ["Visit career portal for complete requirements"],
+    url: job.url,
+    careersUrl: job.careersUrl || null,
+    posted_at: job.posted_at
+  }));
+
+  // Normalize Supabase jobs (these may lack descriptions)
+  const dbNormalized = supabaseJobs.map(job => {
+    const isIntern = job.title.toLowerCase().includes('intern');
+    return {
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      ats: job.ats,
+      matchScore: job.matchScore || Math.floor(Math.random() * 15) + 83,
+      type: job.type || (isIntern ? 'intern' : 'fulltime'),
+      experienceLevel: job.experienceLevel || classifyExperienceLevel(job.title),
+      qualifications: job.qualifications || [
+        "Solid understanding of software development patterns",
+        "Experience writing clean, maintainable code",
+        "Ability to work collaboratively in a fast-paced environment"
+      ],
+      desired: job.desired || [
+        "Familiarity with cloud platforms (AWS, GCP, or Azure)",
+        "Interest or experience in the company's domain",
+        "Good communication and team-player mindset"
+      ],
+      url: job.url,
+      careersUrl: job.careersUrl || null,
+      posted_at: job.posted_at
+    };
+  });
+
+  // Merge: live-scraped jobs take priority, then Supabase, then seeds
+  // Deduplicate by id
+  const seenIds = new Set(SEED_JOBS.map(j => j.id));
+  const mergedNew = [];
+  for (const job of [...liveJobs, ...dbNormalized]) {
+    if (!seenIds.has(job.id)) {
+      seenIds.add(job.id);
+      mergedNew.push(job);
+    }
+  }
+
+  MASTER_JOBS_DECK = [...SEED_JOBS, ...mergedNew];
+  updateSearchFilters();
+
+  addLine(`Deck updated with ${mergedNew.length} new jobs (${liveJobs.length} live + ${dbNormalized.length} stored).`, "system");
+
+  setTimeout(() => {
+    overlay.style.display = "none";
+    showNotification(`Refreshed! Deck now has ${activeJobs.length} active jobs with unique descriptions.`);
+  }, 1200);
 }
 
 // AI Panel control matrix
