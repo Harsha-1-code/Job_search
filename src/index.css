@@ -572,6 +572,34 @@ body::before {
   cursor: grabbing;
 }
 
+.job-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-grow: 1;
+  padding-right: 6px;
+}
+
+/* Sleek custom scrollbar for the card body */
+.job-card-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.job-card-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.job-card-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.job-card-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .job-card-header {
   display: flex;
   justify-content: space-between;
