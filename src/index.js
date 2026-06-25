@@ -17,6 +17,19 @@ function escapeHTML(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Experience level classifier — derives seniority from job title keywords
+function classifyExperienceLevel(title) {
+  const t = title.toLowerCase();
+  // Manager / Director / VP / Head / Chief level
+  if (/\b(manager|director|vp|vice president|head of|chief|cto|cfo|coo|cxo)\b/.test(t)) return 'manager';
+  // Senior / Staff / Principal / Lead / Architect level
+  if (/\b(senior|sr\.?|staff|principal|lead|architect|distinguished)\b/.test(t)) return 'senior';
+  // Fresher / Intern / Junior / Graduate / Entry level
+  if (/\b(intern|junior|jr\.?|graduate|entry|trainee|associate|new grad|fresher|apprentice)\b/.test(t)) return 'fresher';
+  // Default to mid-level
+  return 'mid';
+}
+
 // Initial Seed Jobs database
 // Each job includes a careersUrl pointing to the company's real careers page
 const SEED_JOBS = [
@@ -28,6 +41,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 92,
     type: "intern",
+    experienceLevel: "fresher",
     qualifications: [
       "Pursuing a degree in Computer Science, Engineering, or related field from Tier 1 college",
       "Familiarity with web application development frameworks and modern database architectures",
@@ -50,6 +64,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 88,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Strong experience with React, TypeScript, and high-performance Node.js services",
       "Understanding of canvas architectures or WebGL is a huge plus",
@@ -71,6 +86,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 95,
     type: "fulltime",
+    experienceLevel: "senior",
     qualifications: [
       "Deep expertise in Next.js, React, and modern web deployment pipelines",
       "Strong profile optimizing Core Web Vitals (LCP, FID, CLS)",
@@ -92,6 +108,7 @@ const SEED_JOBS = [
     ats: "lever",
     matchScore: 84,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Experience implementing zero-trust network frameworks and microservice boundaries",
       "Deep understanding of OWASP Top 10 vulnerabilities and modern mitigation strategies",
@@ -113,6 +130,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 91,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Proficiency in Go, Java, or Python for building high-throughput payment services",
       "Strong understanding of distributed systems and microservice patterns",
@@ -134,6 +152,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 96,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Strong experience building platform tools and developer-facing APIs",
       "Proficiency in Ruby, Go, or Java",
@@ -155,6 +174,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 89,
     type: "intern",
+    experienceLevel: "fresher",
     qualifications: [
       "Pursuing BS/MS in Computer Science or equivalent",
       "Strong JavaScript/TypeScript and React fundamentals",
@@ -176,6 +196,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 87,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "2+ years experience in full-stack web development",
       "Strong proficiency in Ruby on Rails or Node.js backend",
@@ -197,6 +218,7 @@ const SEED_JOBS = [
     ats: "lever",
     matchScore: 83,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Strong experience in React Native or Flutter for cross-platform mobile apps",
       "Deep understanding of mobile performance optimization",
@@ -218,6 +240,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 86,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Strong experience with Kubernetes, Docker, and container orchestration",
       "Proficiency in Infrastructure as Code (Terraform, Pulumi)",
@@ -239,6 +262,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 85,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Proficiency in Python, Spark, and SQL for large-scale data processing",
       "Experience with data warehousing and ETL pipeline design",
@@ -260,6 +284,7 @@ const SEED_JOBS = [
     ats: "greenhouse",
     matchScore: 90,
     type: "fulltime",
+    experienceLevel: "mid",
     qualifications: [
       "Strong experience in Go, Python, or Java for backend services",
       "Understanding of blockchain fundamentals and cryptographic principles",
@@ -661,16 +686,11 @@ function renderJobCard() {
   document.getElementById("ats-badge").innerText = job.ats;
   document.getElementById("match-score-display").innerText = `${job.matchScore}%`;
 
-  // Use direct Greenhouse/Lever apply URL first, fall back to company careers page
-  const applyUrl = job.url || job.careersUrl || '#';
+  // Link directly to the company's career portal
   const careersLinkBtn = document.getElementById("careers-link-btn");
-  careersLinkBtn.href = applyUrl;
-  careersLinkBtn.title = job.ats === 'greenhouse'
-    ? `Apply on Greenhouse for ${job.company}`
-    : job.ats === 'lever'
-      ? `Apply on Lever for ${job.company}`
-      : `Apply at ${job.company}`;
-  careersLinkBtn.textContent = `Apply on ${job.ats === 'greenhouse' ? 'Greenhouse' : job.ats === 'lever' ? 'Lever' : 'Careers'} ↗`;
+  careersLinkBtn.href = job.careersUrl || job.url || '#';
+  careersLinkBtn.title = `View careers at ${job.company}`;
+  careersLinkBtn.textContent = `View on Career Portal ↗`;
 
   // Render location safely
   const locEl = document.getElementById("job-location-display");
@@ -850,7 +870,7 @@ function renderKanban() {
         </div>
         <div class="kanban-card-company">${escapeHTML(job.company)} • <span style="font-size: 11px; text-transform: uppercase;">${escapeHTML(job.ats)}</span></div>
         <div style="margin-top: 4px; margin-bottom: 8px;">
-          <a href="${escapeHTML(job.url || job.careersUrl || '#')}" target="_blank" rel="noopener noreferrer" style="font-size: 11.5px; color: var(--color-accent); text-decoration: none; font-weight: 500;">Apply on ${job.ats === 'greenhouse' ? 'Greenhouse' : job.ats === 'lever' ? 'Lever' : 'Careers'} ↗</a>
+          <a href="${escapeHTML(job.careersUrl || job.url || '#')}" target="_blank" rel="noopener noreferrer" style="font-size: 11.5px; color: var(--color-accent); text-decoration: none; font-weight: 500;">View on Career Portal ↗</a>
         </div>
         <div class="kanban-card-footer">
           <span style="font-size: 11px; color: var(--color-orange); font-weight:600;">${escapeHTML(job.matchScore)}% Match</span>
@@ -1038,6 +1058,7 @@ function updateSearchFilters() {
   const atsF = document.getElementById("filter-ats").value;
   const scoreF = parseInt(document.getElementById("filter-match-score").value);
   const locTypeF = document.getElementById("filter-location-type").value;
+  const expF = document.getElementById("filter-experience-level").value;
 
   activeJobs = MASTER_JOBS_DECK.filter(job => {
     // Exclude passed or saved/applied/pipeline jobs
@@ -1053,6 +1074,7 @@ function updateSearchFilters() {
     const matchesType = typeF === 'all' || job.type === typeF;
     const matchesAts = atsF === 'all' || job.ats === atsF;
     const matchesScore = job.matchScore >= scoreF;
+    const matchesExp = expF === 'all' || (job.experienceLevel || classifyExperienceLevel(job.title)) === expF;
 
     let matchesLocType = true;
     if (locTypeF === 'remote') {
@@ -1061,7 +1083,7 @@ function updateSearchFilters() {
       matchesLocType = job.location.toLowerCase().includes('bengaluru');
     }
 
-    return matchesTitle && matchesLocation && matchesType && matchesAts && matchesScore && matchesLocType;
+    return matchesTitle && matchesLocation && matchesType && matchesAts && matchesScore && matchesLocType && matchesExp;
   });
 
   currentJobIndex = 0;
@@ -1073,6 +1095,7 @@ function updateSearchFilters() {
   if (atsF !== 'all') count++;
   if (scoreF > 50) count++;
   if (locTypeF !== 'all') count++;
+  if (expF !== 'all') count++;
 
   document.getElementById("filter-badge-count").innerText = count;
 }
@@ -1141,6 +1164,7 @@ async function runManualScraper() {
             ats: job.ats,
             matchScore: job.matchScore || Math.floor(Math.random() * 15) + 83,
             type: job.type || (isIntern ? 'intern' : 'fulltime'),
+            experienceLevel: job.experienceLevel || classifyExperienceLevel(job.title),
             qualifications: job.qualifications || [
               "Solid understanding of software development patterns",
               "Experience writing clean, maintainable code",
@@ -1588,6 +1612,7 @@ function setupEventListeners() {
     document.getElementById("filter-match-score").value = "50";
     document.getElementById("filter-match-score-val").innerText = "50%";
     document.getElementById("filter-location-type").value = "all";
+    document.getElementById("filter-experience-level").value = "all";
     updateSearchFilters();
     showNotification("Filters cleared.");
   });

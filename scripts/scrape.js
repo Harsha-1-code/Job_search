@@ -29,6 +29,15 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_CUTOFF = 30;
 
+// Experience level classifier — derives seniority from job title keywords
+function classifyExperienceLevel(title) {
+  const t = title.toLowerCase();
+  if (/\b(manager|director|vp|vice president|head of|chief|cto|cfo|coo|cxo)\b/.test(t)) return 'manager';
+  if (/\b(senior|sr\.?|staff|principal|lead|architect|distinguished)\b/.test(t)) return 'senior';
+  if (/\b(intern|junior|jr\.?|graduate|entry|trainee|associate|new grad|fresher|apprentice)\b/.test(t)) return 'fresher';
+  return 'mid';
+}
+
 async function runScraper() {
   console.log('=== Starting Sprout Bulk Seed Job Scraper ===');
 
@@ -137,7 +146,8 @@ async function runScraper() {
           url: company.ats === 'greenhouse' ? job.absolute_url : job.hostedUrl,
           careersUrl: company.careersUrl || null,
           posted_at: jobDate.toISOString(),
-          ats: company.ats
+          ats: company.ats,
+          experienceLevel: classifyExperienceLevel(job.title)
         });
       } else {
         const reason = !isRecent ? 'Too old (>30 days)' : 'Wrong location';
