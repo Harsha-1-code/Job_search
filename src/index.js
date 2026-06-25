@@ -940,19 +940,12 @@ function removeFromPipeline(jobId, lane, cardEl) {
 
 // Trigger AI Panel from Kanban item directly
 window.triggerDirectAITailor = function (jobId) {
-  // Search everywhere: active deck, all pipeline lanes, seed jobs
-  const allJobs = [
-    ...SEED_JOBS,
-    ...(activeJobs || []),
-    ...(pipeline.saved || []),
-    ...(pipeline.applied || []),
-    ...(pipeline.interviewing || []),
-    ...(pipeline.offer || [])
-  ];
+  const allJobs = [...SEED_JOBS, ...(activeJobs || [])];
   const found = allJobs.find(j => j.id == jobId);
   if (found) {
-    // Pass the job directly — it may not be in activeJobs anymore
-    openAIPanel(found);
+    const mockIndex = activeJobs.findIndex(j => j.id == jobId);
+    if (mockIndex > -1) currentJobIndex = mockIndex;
+    openAIPanel();
   }
 };
 
@@ -1184,12 +1177,11 @@ async function runManualScraper() {
 }
 
 // AI Panel control matrix
-// @param {object} [targetJob] — optional job to tailor for; if omitted, uses current deck card
-function openAIPanel(targetJob) {
+function openAIPanel() {
   const panel = document.getElementById("ai-panel");
   panel.classList.add("open");
 
-  const job = targetJob || activeJobs[currentJobIndex] || SEED_JOBS[0];
+  const job = activeJobs[currentJobIndex] || SEED_JOBS[0];
   document.getElementById("target-job-label").innerText = `${job.title} at ${job.company}`;
   document.getElementById("base-resume-input").value = BASE_RESUME;
 
@@ -1828,6 +1820,173 @@ function setupChatbot() {
   // which is loaded as a separate <script defer> tag in index.html.
 }
 
+let isChatOpen = false;
+let chatMessages = [];
+
+// Add welcome message
+addBotMessage("Hey there! 👋 I'm the Teak AI Assistant. I can help you with:\n\n• How to tailor your resume\n• Navigating the app\n• Application tips\n• Understanding features\n\nWhat would you like to know?");
+
+// Show suggestion chips
+renderSuggestions([
+  'How do I tailor my resume?',
+  'How to apply for a job?',
+  'How to use filters?',
+  'What is the outreach console?'
+]);
+
+// Toggle chat
+fab.addEventListener('click', () => {
+  isChatOpen = !isChatOpen;
+  fab.classList.toggle('open', isChatOpen);
+  panel.classList.toggle('open', isChatOpen);
+
+  if (isChatOpen) {
+    setTimeout(() => chatInput.focus(), 300);
+  }
+});
+
+// Send message
+sendBtn.addEventListener('click', () => sendMessage());
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  addUserMessage(text);
+  chatInput.value = '';
+  suggestionsContainer.innerHTML = '';
+
+  handleBotResponse(text);
+}
+
+function addUserMessage(text) {
+  chatMessages.push({ role: 'user', text });
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble user';
+  bubble.textContent = text;
+  messagesContainer.appendChild(bubble);
+  scrollToBottom();
+}
+
+function addBotMessage(text) {
+  chatMessages.push({ role: 'bot', text });
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble bot';
+  bubble.textContent = text;
+  messagesContainer.appendChild(bubble);
+  scrollToBottom();
+}
+
+function showTypingIndicator() {
+  const indicator = document.createElement('div');
+  indicator.className = 'chat-typing-indicator';
+  indicator.id = 'typing-indicator';
+  indicator.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  messagesContainer.appendChild(indicator);
+  scrollToBottom();
+}
+
+function removeTypingIndicator() {
+  const indicator = document.getElementById('typing-indicator');
+  if (indicator) indicator.remove();
+}
+
+function scrollToBottom() {
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function renderSuggestions(chips) {
+  suggestionsContainer.innerHTML = '';
+  chips.forEach(chip => {
+    const btn = document.createElement('button');
+    btn.className = 'chat-suggestion-chip';
+    btn.textContent = chip;
+    btn.addEventListener('click', () => {
+      chatInput.value = chip;
+      sendMessage();
+    });
+    suggestionsContainer.appendChild(btn);
+  });
+}
+
+async function handleBotResponse(userText) {
+  const lowerText = userText.toLowerCase().replace(/[?!.]/g, '').trim();
+
+  // Check FAQ first
+  let faqAnswer = null;
+  for (const [key, answer] of Object.entries(CHAT_FAQ)) {
+    if (lowerText.includes(key) || key.includes(lowerText) || levenshteinSimilar(lowerText, key)) {
+      faqAnswer = answer;
+      break;
+    }
+  }
+
+  if (faqAnswer) {
+    showTypingIndicator();
+    await delay(600 + Math.random() * 400);
+    removeTypingIndicator();
+    addBotMessage(faqAnswer);
+    renderContextualSuggestions(lowerText);
+    return;
+  }
+
+  // Try AI backend
+  showTypingIndicator();
+  try {
+    const systemPrompt = `You are Teak AI Assistant, a helpful chatbot for the Teak job search platform. Teak is an AI-powered job board that helps candidates find tech jobs, tailor resumes using LLMs, manage applications via a Kanban board, generate outreach messages for recruiters, and draft email replies. The app has these sections: Jobs (swipe deck), Applications (Kanban), Outreach (recruiter messaging), Emails (follow-up drafts), Skipped (last 30 passed jobs), and Profile & Keys (settings). Keep answers concise and helpful. If asked about something unrelated to job searching or the app, politely redirect.`;
+
+    // Map chat messages to the format expected by the backend
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...chatMessages.map(msg => ({
+        role: msg.role === 'bot' ? 'assistant' : msg.role,
+        content: msg.text
+      }))
+    ];
+
+    const result = await callAIBackend('/api/chat', { messages });
+
+    removeTypingIndicator();
+    addBotMessage(stripMarkdown(result.text));
+  } catch (err) {
+    removeTypingIndicator();
+    // Fuzzy fallback
+    addBotMessage("I can help with questions about using Teak! Try asking about how to tailor your resume, apply for jobs, use the outreach console, track applications, or manage your profile.");
+    renderSuggestions([
+      'How do I tailor my resume?',
+      'How to track applications?',
+      'How to view skipped jobs?',
+      'How to upload resume?'
+    ]);
+  }
+}
+
+function levenshteinSimilar(a, b) {
+  // Simple keyword overlap check
+  const wordsA = a.split(/\s+/);
+  const wordsB = b.split(/\s+/);
+  const overlap = wordsA.filter(w => wordsB.includes(w) && w.length > 2);
+  return overlap.length >= 2;
+}
+
+function renderContextualSuggestions(lastQuery) {
+  const suggestions = [];
+  if (!lastQuery.includes('tailor')) suggestions.push('How do I tailor my resume?');
+  if (!lastQuery.includes('apply')) suggestions.push('How to apply for a job?');
+  if (!lastQuery.includes('filter')) suggestions.push('How to use filters?');
+  if (!lastQuery.includes('skip')) suggestions.push('How to view skipped jobs?');
+  renderSuggestions(suggestions.slice(0, 3));
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 
 // ============================================================
